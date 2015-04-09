@@ -1,0 +1,22 @@
+Plan of attack
+
+File system header
+Create iNodes
+Build free list
+Root directory
+Create
+Open
+Close
+Read
+Write
+Shutdown
+MkDir
+RmDir
+ChDir
+Seek
+Link
+Unlink
+Symbolic links
+Symlink
+Readlink
+Sync
