@@ -8,7 +8,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#define CREATE 0
+#define DATA2LENGTH 16
 
+struct my_msg {
+	int type;
+	int data1;
+	char data2[DATA2LENGTH];
+	void* ptr;
+};
 
 struct free_inode {
 	struct free_inode *next;
@@ -23,6 +31,58 @@ struct free_data_block {
 struct free_inode* free_inode_list;
 struct free_data_block* free_data_block_list;
 
+int cur_directory_inode;
+
+struct my_msg* msg_buf;
+
+struct inode* get_directory_inode(char* pathname) {
+
+	struct inode* dir = malloc(INODESIZE);
+	void* buf = malloc(SECTORSIZE);
+	ReadSector(1, buf);
+	dir = buf + INODESIZE;
+
+	return dir;
+}
+
+char* get_pathname(char* filepath) {
+	int end_of_path_index = -1;
+
+	int i;
+	for (i = 0; i < MAXPATHNAMELEN; i++) {
+		if (filepath[i] == '/') {
+			end_of_path_index = i;
+		}
+	}
+
+	char* pathname = malloc(end_of_path_index + 1);
+	memcpy(pathname, filepath, end_of_path_index + 1);
+	return pathname;
+}
+char* get_filename(char* filepath) {
+	int end_of_path_index = -1;
+	int end_of_file_index = 0;
+
+	int i;
+	for (i = 0; i < MAXPATHNAMELEN; i++) {
+		if (filepath[i] == '/') {
+			end_of_path_index = i;
+		}
+		end_of_file_index = i;
+		if (filepath[i] == '\0') {
+			break;
+		}
+	}
+	int filename_size = end_of_file_index - end_of_path_index + 1;
+	char* filename = malloc(filename_size);
+	memcpy(filename, filepath + end_of_path_index + 1, filename_size);
+	return filename;
+}
+
+int create_file(char* filepath) {
+	struct inode* dir_inode = get_directory_inode(get_pathname(filepath));
+
+}
 void free_data_block_num(int cur_block_num) {
 	if (cur_block_num != 0) {
 		struct free_data_block* prev_data_block = NULL;
@@ -51,6 +111,7 @@ void remove_data_block_from_free_list(struct inode* inode) {
 }
 
 int main() {
+	msg_buf = malloc(sizeof(struct my_msg));
 	struct fs_header* header = malloc(SECTORSIZE);
  	ReadSector(1, header);
 
@@ -60,7 +121,8 @@ int main() {
 
  	free_inode_list = NULL;
  	free_data_block_list = NULL;
-
+	
+	cur_directory_inode = ROOTINODE;
  	int a;
  	for (a = num_inode_blocks + 1; a < header->num_blocks; a++) {
  		struct free_data_block* new_data_block = malloc(sizeof(struct free_data_block));
@@ -88,12 +150,33 @@ int main() {
 
  				free_inode_list = new_free_inode;
  			}
- 			else {
-
+ 			else {				
  				remove_data_block_from_free_list(new_inode);
  			}
  		}
 	}
 
+	char* path = "/abc/bed/c/d.txt\0\0\0\0\0\0\0\0\0\0";
+	char* pathname = get_pathname(path);
+	char* filename = get_filename(path);
+	printf("pathname %s, filename %s\n", pathname, filename);
+	if (Register(FILE_SERVER) != 0) {
+		printf("EROOR: Register file server\n");
+		return 1;
+	}
+
+
+	while (1) {
+		int pid = Receive(msg_buf);
+		if (pid == ERROR) {
+			printf("Error recieiving\n");
+		}
+		if (msg_buf->type == CREATE) {
+			int result = create_file(msg_buf->data2);
+			if (Reply(msg_buf, pid) != 0) {
+				printf("Error replying");
+			}
+		}
+	}
 	return 0;
 }

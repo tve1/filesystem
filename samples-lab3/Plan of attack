@@ -1,9 +1,9 @@
 Plan of attack
 
-File system header
-Create iNodes
-Build free list
-Root directory
+File system header DONE
+Create iNodes DONE
+Build free list DONE
+Root directory 
 Create
 Open
 Close
