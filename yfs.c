@@ -142,11 +142,10 @@ void remove_data_block_from_free_list(struct inode* inode) {
 	free_data_block_num(inode->indirect);
 }
 
-int main() {
+int main(int argc, char* argv[]) {
 	msg_buf = malloc(sizeof(struct my_msg));
 	struct fs_header* header = malloc(SECTORSIZE);
- 	ReadSector(1, header);
-
+	ReadSector(1, header);
  	int total_nodes = header->num_inodes + 1;
  	int node_size = total_nodes * INODESIZE;
  	int num_inode_blocks = (node_size + BLOCKSIZE - 1)/ BLOCKSIZE;
@@ -155,6 +154,7 @@ int main() {
  	free_data_block_list = NULL;
 	
 	cur_directory_inode = ROOTINODE;
+	printf("z\n");
  	int a;
  	for (a = num_inode_blocks + 1; a < header->num_blocks; a++) {
  		struct free_data_block* new_data_block = malloc(sizeof(struct free_data_block));
@@ -198,13 +198,20 @@ int main() {
 		return 1;
 	}
 
+	printf("Registered server\n");
+	if (Fork() != 0) {
+		printf("Forking %s\n", argv[1]);
+		Exec(argv[1], argv + 1);
+	}
 
 	while (1) {
 		int pid = Receive(msg_buf);
 		if (pid == ERROR) {
 			printf("Error receiving\n");
 		}
+		printf("Recieved message\n");
 		if (msg_buf->type == CREATE) {
+			printf("Creating file %s\n", msg_buf->data2);
 			int result = create_file(msg_buf->data2);
 			if (Reply(msg_buf, pid) != 0) {
 				printf("Error replying\n");

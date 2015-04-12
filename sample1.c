@@ -5,8 +5,9 @@ int
 main()
 {
 	int fd;
-
-	fd = Create("a");
+	printf("Sample 1 -- crating file \n");
+	fd = Create("/a");
+	printf("Done creating %d\n", fd);
 	// Write(fd, "aaaaaaaaaaaaaaaa", 16);
 	// Close(fd);
 
