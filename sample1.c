@@ -5,7 +5,7 @@ int
 main()
 {
 	int fd;
-	printf("Sample 1 -- crating file \n");
+	printf("Sample 1 -- creating file \n");
 	fd = Create("/a");
 	printf("Done creating %d\n", fd);
 	// Write(fd, "aaaaaaaaaaaaaaaa", 16);

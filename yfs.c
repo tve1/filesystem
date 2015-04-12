@@ -55,6 +55,11 @@ struct inode* get_directory_inode(char* pathname) {
 	return dir;
 }
 
+// struct dir_entry* get_root_dir(){
+// 	void* buf = malloc(SECTORSIZE);
+// 	ReadSector(ROOTINODE, buf);
+// }
+
 char* get_pathname(char* filepath) {
 	int end_of_path_index = -1;
 
@@ -199,17 +204,19 @@ int main(int argc, char* argv[]) {
 	}
 
 	printf("Registered server\n");
-	if (Fork() != 0) {
+	if (Fork() == 0) {
 		printf("Forking %s\n", argv[1]);
 		Exec(argv[1], argv + 1);
 	}
 
 	while (1) {
+
 		int pid = Receive(msg_buf);
+		
 		if (pid == ERROR) {
 			printf("Error receiving\n");
 		}
-		printf("Recieved message\n");
+		printf("Received message\n");
 		if (msg_buf->type == CREATE) {
 			printf("Creating file %s\n", msg_buf->data2);
 			int result = create_file(msg_buf->data2);
@@ -217,6 +224,7 @@ int main(int argc, char* argv[]) {
 				printf("Error replying\n");
 			}
 		}
+		printf("alkdsjf: %d\n", )
 	}
 	return 0;
 }

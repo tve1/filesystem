@@ -20,17 +20,19 @@ struct my_msg {
 
 int Create(char *pathname) 
 {
-	printf("Create\n");
-		// struct my_msg create_msg;
-		// create_msg.type = CREATE;
-		// int i;
-		// for (i = 0; i < DATA2LENGTH; i++) {
-		// 	create_msg.data2[i] = pathname[i];
-		// }
-		// if (Send(&create_msg, -FILE_SERVER) != 0) {
-		// 	printf("Error creating file\n");
-		// 	return ERROR;
-		// } 
-	return -1;
+	printf("in iolib\n");
+		struct my_msg create_msg;
+		create_msg.type = CREATE;
+		int i;
+		for (i = 0; i < DATA2LENGTH; i++) {
+			create_msg.data2[i] = pathname[i];
+		}
+		printf("sending\n");
+		if (Send(&create_msg, -FILE_SERVER) != 0) {
+			printf("Error creating file\n");
+			return ERROR;
+		} 
+		printf("sent\n");
+	return 0;
 
 }
