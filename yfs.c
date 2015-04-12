@@ -21,6 +21,7 @@ struct my_msg {
 struct free_inode {
 	struct free_inode *next;
 	struct inode *inode;
+	short inum;
 };
 
 struct free_data_block {
@@ -34,6 +35,15 @@ struct free_data_block* free_data_block_list;
 int cur_directory_inode;
 
 struct my_msg* msg_buf;
+
+struct free_inode* alloc_free_inode(){
+	struct free_inode* inode = free_inode_list;
+	if (inode == NULL){
+		printf("no free inodes\n");
+	}
+	free_inode_list = free_inode_list->next;
+	return inode;
+}
 
 struct inode* get_directory_inode(char* pathname) {
 
@@ -79,10 +89,32 @@ char* get_filename(char* filepath) {
 	return filename;
 }
 
+int add_block_num(struct inode* inode, int num){
+	int i;
+	for (i=0; i < NUM_DIRECT; i++){
+		if (inode->direct[i] == 0){
+			inode->direct[i] = num;
+			return 0;
+		}
+	}
+	//TODO: add indirect block 
+	return -1; 
+}
+
 int create_file(char* filepath) {
 	struct inode* dir_inode = get_directory_inode(get_pathname(filepath));
-
+	struct dir_entry* new_file = malloc(sizeof(struct dir_entry));
+	struct free_inode* new_inode = alloc_free_inode();
+	new_inode->inode->type = INODE_REGULAR;
+	new_inode->inode->nlink = 1;
+	new_inode->inode->reuse++;
+	new_inode->inode->size = 0;
+	new_file->inum = new_inode->inum;
+	memcpy(new_file->name, filepath, DIRNAMELEN);
+	add_block_num(dir_inode, new_file->inum);
+	return 0;
 }
+
 void free_data_block_num(int cur_block_num) {
 	if (cur_block_num != 0) {
 		struct free_data_block* prev_data_block = NULL;
@@ -145,6 +177,7 @@ int main() {
  			struct inode *new_inode = (struct inode*) ((unsigned long)cur_sector + INODESIZE * j);
  			if (new_inode->type == INODE_FREE) {
  				struct free_inode* new_free_inode = malloc(sizeof(struct free_inode));
+ 				new_free_inode->inum = j + (i-1) * BLOCKSIZE/INODESIZE;
  				new_free_inode->next = free_inode_list;
  				new_free_inode->inode = new_inode;
 
@@ -156,12 +189,12 @@ int main() {
  		}
 	}
 
-	char* path = "/abc/bed/c/d.txt\0\0\0\0\0\0\0\0\0\0";
-	char* pathname = get_pathname(path);
-	char* filename = get_filename(path);
-	printf("pathname %s, filename %s\n", pathname, filename);
+	// char* path = "/abc/bed/c/d.txt\0\0\0\0\0\0\0\0\0\0";
+	// char* pathname = get_pathname(path);
+	// char* filename = get_filename(path);
+	// printf("pathname %s, filename %s\n", pathname, filename);
 	if (Register(FILE_SERVER) != 0) {
-		printf("EROOR: Register file server\n");
+		printf("ERROR: Register file server\n");
 		return 1;
 	}
 
@@ -169,12 +202,12 @@ int main() {
 	while (1) {
 		int pid = Receive(msg_buf);
 		if (pid == ERROR) {
-			printf("Error recieiving\n");
+			printf("Error receiving\n");
 		}
 		if (msg_buf->type == CREATE) {
 			int result = create_file(msg_buf->data2);
 			if (Reply(msg_buf, pid) != 0) {
-				printf("Error replying");
+				printf("Error replying\n");
 			}
 		}
 	}

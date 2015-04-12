@@ -26,10 +26,10 @@ int Create(char *pathname)
 	for (i = 0; i < DATA2LENGTH; i++) {
 		create_msg.data2[i] = pathname[i];
 	}
-	if (Send(&create_msg, -FILE_SERVER) != 0) {
-		printf("Error creating file\n");
-		return ERROR;
-	} 
+	// if (Send(&create_msg, -FILE_SERVER) != 0) {
+	// 	printf("Error creating file\n");
+	// 	return ERROR;
+	// } 
 	return 0;
 
 }
