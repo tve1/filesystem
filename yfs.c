@@ -94,16 +94,32 @@ char* get_filename(char* filepath) {
 	return filename;
 }
 
-int add_block_num(struct inode* inode, int num){
+int add_dir_entry(struct inode* inode, struct dir_entry* new_dir_entry){
+	void* block_data = malloc(BLOCKSIZE);
+	
+	int didAdd = 0;
 	int i;
 	for (i=0; i < NUM_DIRECT; i++){
-		if (inode->direct[i] == 0){
-			inode->direct[i] = num;
-			return 0;
+		if (inode->direct[i] != 0) {
+			ReadSector(inode->direct[i], block_data);
+			int j;
+			for (j = 0; j < (BLOCKSIZE / sizeof(struct dir_entry)); j++) {
+				struct dir_entry* cur = (struct dir_entry *) ((unsigned long)block_data + j * sizeof(struct dir_entry));
+				printf("curname %s, %d, %d\n", cur->name, cur->inum, j);
+				if (cur->inum == 0) {
+					memcpy((struct dir_entry *) ((unsigned long)block_data + j * sizeof(struct dir_entry)), new_dir_entry, sizeof(struct  dir_entry));
+					printf("Wrote %s to inode %d\n", new_dir_entry->name, j);
+					WriteSector(inode->direct[i], block_data);
+					didAdd = 1;
+					break;
+				}
+			}	
+		}
+		if (didAdd == 1) {
+			break;
 		}
 	}
-	//TODO: add indirect block 
-	return -1; 
+	return 0; 
 }
 
 int create_file(char* filepath) {
@@ -116,7 +132,7 @@ int create_file(char* filepath) {
 	new_inode->inode->size = 0;
 	new_file->inum = new_inode->inum;
 	memcpy(new_file->name, filepath, DIRNAMELEN);
-	add_block_num(dir_inode, new_file->inum);
+	add_dir_entry(dir_inode, new_file);
 	return 0;
 }
 
@@ -224,7 +240,6 @@ int main(int argc, char* argv[]) {
 				printf("Error replying\n");
 			}
 		}
-		printf("alkdsjf: %d\n", )
 	}
 	return 0;
 }
