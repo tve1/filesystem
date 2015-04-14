@@ -6,8 +6,13 @@ main()
 {
 	int fd;
 	printf("Sample 1 -- creating file \n");
-	fd = Create("/a");
-	printf("Done creating %d\n", fd);
+	while(1) {
+		fd = Create("/a");
+		printf("Done creating %d\n", fd);
+		if (fd == -1) {
+			break;
+		}
+	}
 	// Write(fd, "aaaaaaaaaaaaaaaa", 16);
 	// Close(fd);
 

@@ -45,14 +45,24 @@ struct free_inode* alloc_free_inode(){
 	return inode;
 }
 
-struct inode* get_directory_inode(char* pathname) {
+struct free_data_block* alloc_free_block() {
+	struct free_data_block* blk = free_data_block_list;
+	if (blk == NULL) {
+		printf("No free blocks\n");
+	}
+	free_data_block_list = free_data_block_list->next;
+	return blk;
+}
 
+struct free_inode* get_directory_inode(char* pathname) {
+	struct free_inode* f = malloc(sizeof(struct free_inode)); 
 	struct inode* dir = malloc(INODESIZE);
 	void* buf = malloc(SECTORSIZE);
 	ReadSector(1, buf);
 	dir = buf + INODESIZE;
-
-	return dir;
+	f->inum = 1;
+	f->inode = dir;
+	return f;
 }
 
 // struct dir_entry* get_root_dir(){
@@ -94,10 +104,11 @@ char* get_filename(char* filepath) {
 	return filename;
 }
 
-int add_dir_entry(struct inode* inode, struct dir_entry* new_dir_entry){
+int add_dir_entry(struct free_inode* free_inode, struct dir_entry* new_dir_entry){
+	struct inode* inode = free_inode->inode;
+
 	void* block_data = malloc(BLOCKSIZE);
 	
-	int didAdd = 0;
 	int i;
 	for (i=0; i < NUM_DIRECT; i++){
 		if (inode->direct[i] != 0) {
@@ -105,25 +116,42 @@ int add_dir_entry(struct inode* inode, struct dir_entry* new_dir_entry){
 			int j;
 			for (j = 0; j < (BLOCKSIZE / sizeof(struct dir_entry)); j++) {
 				struct dir_entry* cur = (struct dir_entry *) ((unsigned long)block_data + j * sizeof(struct dir_entry));
-				printf("curname %s, %d, %d\n", cur->name, cur->inum, j);
 				if (cur->inum == 0) {
 					memcpy((struct dir_entry *) ((unsigned long)block_data + j * sizeof(struct dir_entry)), new_dir_entry, sizeof(struct  dir_entry));
-					printf("Wrote %s to inode %d\n", new_dir_entry->name, j);
 					WriteSector(inode->direct[i], block_data);
-					didAdd = 1;
-					break;
+					return 0;
 				}
 			}	
 		}
-		if (didAdd == 1) {
-			break;
+	}
+	printf("adding a new block\n");
+
+	int p;
+	for (p = 0; p < NUM_DIRECT; p++) {
+		if (inode->direct[p] == 0) {
+			memset(block_data, 0, BLOCKSIZE);
+			struct free_data_block* blk = alloc_free_block();	
+			printf("adding direct block %d\n", blk->block_num);
+			inode->direct[p] = blk->block_num;
+			memcpy(block_data, new_dir_entry, sizeof(struct  dir_entry));
+			WriteSector(inode->direct[p], block_data);			
+			
+			//TODO Cache this
+			void* temp_sector = malloc(BLOCKSIZE);
+			ReadSector(free_inode->inum / (BLOCKSIZE/INODESIZE) + 1, temp_sector);
+			memcpy(temp_sector + free_inode->inum % (BLOCKSIZE/INODESIZE) * sizeof(struct inode), inode, sizeof(struct inode)); 
+			WriteSector(free_inode->inum / (BLOCKSIZE/INODESIZE) + 1, temp_sector);
+			free(temp_sector);
+			return 0;
 		}
 	}
-	return 0; 
+ 
+	free(block_data);
+	return -1; 
 }
 
 int create_file(char* filepath) {
-	struct inode* dir_inode = get_directory_inode(get_pathname(filepath));
+	struct free_inode* dir_inode = get_directory_inode(get_pathname(filepath));
 	struct dir_entry* new_file = malloc(sizeof(struct dir_entry));
 	struct free_inode* new_inode = alloc_free_inode();
 	new_inode->inode->type = INODE_REGULAR;
@@ -178,6 +206,7 @@ int main(int argc, char* argv[]) {
 	printf("z\n");
  	int a;
  	for (a = num_inode_blocks + 1; a < header->num_blocks; a++) {
+
  		struct free_data_block* new_data_block = malloc(sizeof(struct free_data_block));
  		new_data_block->next = free_data_block_list;
  		new_data_block->block_num = a - num_inode_blocks;
