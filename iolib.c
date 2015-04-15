@@ -7,19 +7,37 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include "msginfo.h"
 
-#define CREATE 0
-#define DATA2LENGTH 16
-struct my_msg {
-	int type;
-	int data1;
-	char data2[DATA2LENGTH];
-	void* ptr;
+struct open_file {
+	int inum;
+	int pos;
+	int is_open;
 };
 
+struct open_file open_file_table[MAX_OPEN_FILES];
+
+int is_init = 0;
+
+void init(){
+	printf("init\n");
+	if (is_init == 0) { 
+		int i;
+		for (i=0; i < MAX_OPEN_FILES; i++) {
+			struct open_file file;
+			file.inum = 0;
+			file.pos = 0;
+			file.is_open = 0;
+			open_file_table[i] = file;
+		}
+	is_init = 1;
+	}
+
+}
 
 int Create(char *pathname) 
 {
+	init();
 	printf("in iolib\n");
 		struct my_msg create_msg;
 		create_msg.type = CREATE;
@@ -32,7 +50,33 @@ int Create(char *pathname)
 			printf("Error creating file\n");
 			return ERROR;
 		} 
-		printf("sent\n");
-	return 0;
+		int j;
+		for (j=0; j < MAX_OPEN_FILES; j++){
+			if (open_file_table[j].is_open == 0){
+				open_file_table[j].is_open = 1;
+				open_file_table[j].inum = create_msg.data1;
+				open_file_table[j].pos = 0;
+				return j;
+			}
+		}
+		printf("no open files in table\n");
+		return ERROR;
 
+}
+
+int Write(int fd, void *buf, int size){
+	init();
+	struct my_msg write_msg;
+	write_msg.type = WRITE;
+	write_msg.ptr = buf;
+	write_msg.data0 = open_file_table[fd].inum;
+	write_msg.data1 = size;
+	write_msg.data3 = open_file_table[fd].pos;
+	printf("writing\n");
+	if (Send(&write_msg, -FILE_SERVER) != 0){
+		printf("error writing file\n");
+		return ERROR;
+	}
+	open_file_table[fd].pos+=size;
+	return open_file_table[fd].pos;
 }

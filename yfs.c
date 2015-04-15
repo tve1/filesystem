@@ -7,19 +7,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include "msginfo.h"
 
-#define CREATE 0
-#define DATA2LENGTH 16
-
-struct my_msg {
-	int type;
-	int data1;
-	char data2[DATA2LENGTH];
-	void* ptr;
-};
-
-struct free_inode {
-	struct free_inode *next;
+struct decorated_inode {
+	struct decorated_inode *next;
 	struct inode *inode;
 	short inum;
 };
@@ -29,19 +20,32 @@ struct free_data_block {
 	int block_num;
 };
 
-struct free_inode* free_inode_list;
+struct decorated_inode* decorated_inode_list;
 struct free_data_block* free_data_block_list;
-
+struct decorated_inode* all_inodes;
 int cur_directory_inode;
 
 struct my_msg* msg_buf;
 
-struct free_inode* alloc_free_inode(){
-	struct free_inode* inode = free_inode_list;
+struct decorated_inode* alloc_free_inode(){
+	struct decorated_inode* inode = all_inodes;
+	while (inode != NULL && inode->inode->type != INODE_FREE){
+		inode = inode->next;
+	} 
 	if (inode == NULL){
 		printf("no free inodes\n");
 	}
-	free_inode_list = free_inode_list->next;
+	return inode;
+}
+
+struct decorated_inode* get_inode(int inum){
+	struct decorated_inode* inode = all_inodes;
+	while (inode != NULL && inode->inum != inum){
+		inode = inode->next;
+	}
+	if (inode == NULL){
+		printf("no inode with inum %d\n", inum);
+	}
 	return inode;
 }
 
@@ -54,15 +58,16 @@ struct free_data_block* alloc_free_block() {
 	return blk;
 }
 
-struct free_inode* get_directory_inode(char* pathname) {
-	struct free_inode* f = malloc(sizeof(struct free_inode)); 
-	struct inode* dir = malloc(INODESIZE);
-	void* buf = malloc(SECTORSIZE);
-	ReadSector(1, buf);
-	dir = buf + INODESIZE;
-	f->inum = 1;
-	f->inode = dir;
-	return f;
+struct decorated_inode* get_directory_inode(char* pathname) {
+	struct decorated_inode* cur = all_inodes;
+	while (cur != NULL){
+		if (cur->inum == ROOTINODE){
+			return cur;
+		}
+		cur = cur->next;
+	}
+	printf("cannot find file\n");
+	return NULL;
 }
 
 // struct dir_entry* get_root_dir(){
@@ -104,8 +109,8 @@ char* get_filename(char* filepath) {
 	return filename;
 }
 
-int add_dir_entry(struct free_inode* free_inode, struct dir_entry* new_dir_entry){
-	struct inode* inode = free_inode->inode;
+int add_dir_entry(struct decorated_inode* decorated_inode, struct dir_entry* new_dir_entry){
+	struct inode* inode = decorated_inode->inode;
 
 	void* block_data = malloc(BLOCKSIZE);
 	
@@ -138,9 +143,9 @@ int add_dir_entry(struct free_inode* free_inode, struct dir_entry* new_dir_entry
 			
 			//TODO Cache this
 			void* temp_sector = malloc(BLOCKSIZE);
-			ReadSector(free_inode->inum / (BLOCKSIZE/INODESIZE) + 1, temp_sector);
-			memcpy(temp_sector + free_inode->inum % (BLOCKSIZE/INODESIZE) * sizeof(struct inode), inode, sizeof(struct inode)); 
-			WriteSector(free_inode->inum / (BLOCKSIZE/INODESIZE) + 1, temp_sector);
+			ReadSector(decorated_inode->inum / (BLOCKSIZE/INODESIZE) + 1, temp_sector);
+			memcpy(temp_sector + decorated_inode->inum % (BLOCKSIZE/INODESIZE) * sizeof(struct inode), inode, sizeof(struct inode)); 
+			WriteSector(decorated_inode->inum / (BLOCKSIZE/INODESIZE) + 1, temp_sector);
 			free(temp_sector);
 			return 0;
 		}
@@ -150,10 +155,74 @@ int add_dir_entry(struct free_inode* free_inode, struct dir_entry* new_dir_entry
 	return -1; 
 }
 
+int add_data(struct decorated_inode* decorated_inode, void* data_buf, int size, int pos){
+	printf("blocksize %d\n", BLOCKSIZE);
+	struct inode* inode = decorated_inode->inode;
+
+	void* block_data = malloc(BLOCKSIZE);
+	
+	int i = pos/BLOCKSIZE;
+	if ((pos + size)/BLOCKSIZE != i){
+		printf("we're here\n");
+		int index = 0;
+		int remaining = size;
+		if (inode->direct[i] == 0){
+			printf("allocating new data block\n");
+			struct free_data_block* blk = alloc_free_block();
+			inode->direct[i] = blk->block_num;
+		}
+		printf("reading\n");
+		ReadSector(inode->direct[i], block_data);
+		memcpy(block_data + pos - i * BLOCKSIZE, data_buf, BLOCKSIZE - (pos - i * BLOCKSIZE));
+		index = BLOCKSIZE - (pos - i * BLOCKSIZE);
+		remaining -= BLOCKSIZE - (pos - i * BLOCKSIZE);
+		WriteSector(inode->direct[i], block_data);
+		int j;
+		for (j = i+1; j < (pos + size)/BLOCKSIZE; j++){
+			if (inode->direct[j] == 0){
+				struct free_data_block* blk = alloc_free_block();
+				inode->direct[i] = blk->block_num;
+			}
+			memset(block_data, 0, BLOCKSIZE);
+			ReadSector(inode->direct[j], block_data);
+			memcpy(block_data, data_buf + index, BLOCKSIZE);
+			WriteSector(inode->direct[j], block_data);
+			index += BLOCKSIZE;
+			remaining -= BLOCKSIZE;
+		}
+		memset(block_data,0, BLOCKSIZE);
+		if (inode->direct[(pos+size)/BLOCKSIZE] == 0){
+			struct free_data_block* blk = alloc_free_block();
+			inode->direct[i] = blk->block_num;
+		}
+		ReadSector(inode->direct[(pos+size)/BLOCKSIZE], block_data);
+		memcpy(block_data, data_buf + index, remaining);
+		WriteSector(inode->direct[(pos+size)/BLOCKSIZE], block_data);
+		return 0;
+	}
+	if (inode->direct[i] != 0){
+		ReadSector(inode->direct[i], block_data);
+		memcpy(block_data + pos - i * BLOCKSIZE, data_buf, size);
+		WriteSector(inode->direct[i], block_data);
+		return 0;
+	}
+	printf("adding a new block\n");
+
+
+	memset(block_data, 0, BLOCKSIZE);
+	struct free_data_block* blk = alloc_free_block();
+	inode->direct[i] = blk->block_num;
+	memcpy(block_data, data_buf, size);
+	WriteSector(inode->direct[i], block_data);
+	free(block_data);
+	return 0;
+
+}
+
 int create_file(char* filepath) {
-	struct free_inode* dir_inode = get_directory_inode(get_pathname(filepath));
+	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
 	struct dir_entry* new_file = malloc(sizeof(struct dir_entry));
-	struct free_inode* new_inode = alloc_free_inode();
+	struct decorated_inode* new_inode = alloc_free_inode();
 	new_inode->inode->type = INODE_REGULAR;
 	new_inode->inode->nlink = 1;
 	new_inode->inode->reuse++;
@@ -161,7 +230,21 @@ int create_file(char* filepath) {
 	new_file->inum = new_inode->inum;
 	memcpy(new_file->name, filepath, DIRNAMELEN);
 	add_dir_entry(dir_inode, new_file);
+	return new_file->inum;
+}
+
+int write_file(int inum, void* client_buf, int size, int srcpid, int pos){
+	struct decorated_inode* inode = get_inode(inum);
+	void* server_buf = malloc(size);
+	int result = CopyFrom(srcpid, server_buf, client_buf, size);
+	if (result != 0){
+		printf("error writing file\n");
+		return ERROR;
+	}
+	printf("server_buf: %s\n", (char*) server_buf);
+	add_data(inode, server_buf, size, pos);
 	return 0;
+
 }
 
 void free_data_block_num(int cur_block_num) {
@@ -198,8 +281,8 @@ int main(int argc, char* argv[]) {
  	int total_nodes = header->num_inodes + 1;
  	int node_size = total_nodes * INODESIZE;
  	int num_inode_blocks = (node_size + BLOCKSIZE - 1)/ BLOCKSIZE;
-
- 	free_inode_list = NULL;
+ 	all_inodes = NULL;
+ 	decorated_inode_list = NULL;
  	free_data_block_list = NULL;
 	
 	cur_directory_inode = ROOTINODE;
@@ -225,17 +308,22 @@ int main(int argc, char* argv[]) {
  				continue;
  			}
  			struct inode *new_inode = (struct inode*) ((unsigned long)cur_sector + INODESIZE * j);
+ 			struct decorated_inode* new_decorated_inode = malloc(sizeof(struct decorated_inode));
+ 			new_decorated_inode->inum = j + (i-1) * BLOCKSIZE/INODESIZE;
+ 			new_decorated_inode->next = all_inodes;
+ 			new_decorated_inode->inode = new_inode;
+ 			all_inodes = new_decorated_inode;
  			if (new_inode->type == INODE_FREE) {
- 				struct free_inode* new_free_inode = malloc(sizeof(struct free_inode));
- 				new_free_inode->inum = j + (i-1) * BLOCKSIZE/INODESIZE;
- 				new_free_inode->next = free_inode_list;
- 				new_free_inode->inode = new_inode;
-
- 				free_inode_list = new_free_inode;
+ 				// new_free_inode->next = free_inode_list;
+ 				// free_inode_list = new_free_inode;
  			}
  			else {				
+ 			printf("a %p\n", all_inodes->next);
  				remove_data_block_from_free_list(new_inode);
+ 			printf("b %p\n", all_inodes->next);
  			}
+ 			printf("inum %p\n", all_inodes->next);
+
  		}
 	}
 
@@ -265,6 +353,14 @@ int main(int argc, char* argv[]) {
 		if (msg_buf->type == CREATE) {
 			printf("Creating file %s\n", msg_buf->data2);
 			int result = create_file(msg_buf->data2);
+			msg_buf->data1 = result;
+			if (Reply(msg_buf, pid) != 0) {
+				printf("Error replying\n");
+			}
+		}
+		if (msg_buf->type == WRITE){
+			printf("writing file!\n");
+			int result = write_file(msg_buf->data0, msg_buf->ptr, msg_buf->data1, pid, msg_buf->data3);
 			if (Reply(msg_buf, pid) != 0) {
 				printf("Error replying\n");
 			}

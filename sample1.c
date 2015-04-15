@@ -6,14 +6,11 @@ main()
 {
 	int fd;
 	printf("Sample 1 -- creating file \n");
-	while(1) {
-		fd = Create("/a");
-		printf("Done creating %d\n", fd);
-		if (fd == -1) {
-			break;
-		}
-	}
-	// Write(fd, "aaaaaaaaaaaaaaaa", 16);
+	fd = Create("/a");
+	printf("Done creating %d\n", fd);
+
+
+	Write(fd, "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij", 640);
 	// Close(fd);
 
 	// fd = Create("b");
