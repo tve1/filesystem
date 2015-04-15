@@ -158,9 +158,11 @@ int add_dir_entry(struct decorated_inode* decorated_inode, struct dir_entry* new
 int read_data(struct decorated_inode* decorated_inode, void* data_buf, int size, int pos){
 	struct inode* inode = decorated_inode->inode;
 	void* block_data = malloc(BLOCKSIZE);
+	memset(block_data, 0, BLOCKSIZE);
 	int i = pos/BLOCKSIZE;
 	int remaining = 0;
-
+	char* tempChar = malloc(BLOCKSIZE);
+	memset (tempChar, 0, BLOCKSIZE);
 	if (pos+size > inode->size) {
 		remaining = inode->size;
 	}
@@ -168,19 +170,52 @@ int read_data(struct decorated_inode* decorated_inode, void* data_buf, int size,
 		remaining = pos+size;
 	}
 	
+	int totalWritten = remaining;
+
+	if ((pos + size)/BLOCKSIZE != i){
+		int index = 0;
+		ReadSector(inode->direct[i], block_data);
+		memcpy(data_buf, block_data + pos - i * BLOCKSIZE, BLOCKSIZE - (pos - i * BLOCKSIZE));
+		// printf("blcok data %s\n", (char*) block_data);
+		index = BLOCKSIZE - (pos - i * BLOCKSIZE);
+		remaining -= BLOCKSIZE - (pos - i * BLOCKSIZE);
+		int j;
+		for (j = i+1; j < (pos + size)/BLOCKSIZE; j++){
+			memset(block_data, 0, BLOCKSIZE);
+			ReadSector(inode->direct[j], block_data);
+			memcpy(data_buf + index, block_data, BLOCKSIZE);
+			
+			index += BLOCKSIZE;
+			remaining -= BLOCKSIZE;
+		}
+
+		memset(block_data,0, BLOCKSIZE);
+		ReadSector(inode->direct[(pos+size)/BLOCKSIZE], block_data);
+		memcpy(data_buf + index, block_data, remaining);
+
+		return totalWritten;
+	}
 	if (inode->direct[i] != 0){
 		ReadSector(inode->direct[i], block_data);
-		memcpy(block_data + pos - i * BLOCKSIZE, data_buf, remaining);
-		return remaining;
+		memcpy(data_buf, block_data + pos - i * BLOCKSIZE, remaining);
+		memcpy(tempChar, block_data, BLOCKSIZE);
+		// printf("i %d\n", pos - i * BLOCKSIZE);
+		// printf("tempchR %s\n", tempChar);
+		
+		// printf("blcok data %s\n", (char*) block_data);
+		return totalWritten;
 	}
 
-	return 0;
+	return -1;
 
 }
 
 int add_data(struct decorated_inode* decorated_inode, void* data_buf, int size, int pos){
 	struct inode* inode = decorated_inode->inode;
 	void* block_data = malloc(BLOCKSIZE);
+	memset(block_data, 0, BLOCKSIZE);
+
+	char* tempChar = malloc(BLOCKSIZE);
 	inode->size += size; // TODO not always true if out of sizes;
 
 	int i = pos/BLOCKSIZE;
@@ -192,17 +227,19 @@ int add_data(struct decorated_inode* decorated_inode, void* data_buf, int size, 
 			struct free_data_block* blk = alloc_free_block();
 			inode->direct[i] = blk->block_num;
 		}
-		printf("reading\n");
-		ReadSector(inode->direct[i], block_data);
+		else {
+			ReadSector(inode->direct[i], block_data);
+		}
 		memcpy(block_data + pos - i * BLOCKSIZE, data_buf, BLOCKSIZE - (pos - i * BLOCKSIZE));
+		memcpy(tempChar, data_buf, BLOCKSIZE - (pos - i * BLOCKSIZE));
+		WriteSector(inode->direct[i], tempChar);
 		index = BLOCKSIZE - (pos - i * BLOCKSIZE);
 		remaining -= BLOCKSIZE - (pos - i * BLOCKSIZE);
-		WriteSector(inode->direct[i], block_data);
 		int j;
 		for (j = i+1; j < (pos + size)/BLOCKSIZE; j++){
 			if (inode->direct[j] == 0){
 				struct free_data_block* blk = alloc_free_block();
-				inode->direct[i] = blk->block_num;
+				inode->direct[j] = blk->block_num;
 			}
 			memset(block_data, 0, BLOCKSIZE);
 			ReadSector(inode->direct[j], block_data);
@@ -219,24 +256,24 @@ int add_data(struct decorated_inode* decorated_inode, void* data_buf, int size, 
 		ReadSector(inode->direct[(pos+size)/BLOCKSIZE], block_data);
 		memcpy(block_data, data_buf + index, remaining);
 		WriteSector(inode->direct[(pos+size)/BLOCKSIZE], block_data);
-		return 0;
+		return size;
 	}
-	if (inode->direct[i] != 0){
+
+	if (inode->direct[i] == 0){
+		printf("adding a new block\n");
+
+		struct free_data_block* blk = alloc_free_block();
+		inode->direct[i] = blk->block_num;
+	
+	}
+	else {
 		ReadSector(inode->direct[i], block_data);
-		memcpy(block_data + pos - i * BLOCKSIZE, data_buf, size);
-		WriteSector(inode->direct[i], block_data);
-		return 0;
 	}
-	printf("adding a new block\n");
-
-
-	memset(block_data, 0, BLOCKSIZE);
-	struct free_data_block* blk = alloc_free_block();
-	inode->direct[i] = blk->block_num;
-	memcpy(block_data, data_buf, size);
+	memcpy(block_data + pos - i * BLOCKSIZE, data_buf, size);
+		
 	WriteSector(inode->direct[i], block_data);
 	free(block_data);
-	return 0;
+	return size;
 
 }
 
