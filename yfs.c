@@ -35,6 +35,7 @@ struct decorated_inode* alloc_free_inode(){
 	if (inode == NULL){
 		printf("no free inodes\n");
 	}
+
 	return inode;
 }
 
@@ -156,14 +157,12 @@ int add_dir_entry(struct decorated_inode* decorated_inode, struct dir_entry* new
 }
 
 int add_data(struct decorated_inode* decorated_inode, void* data_buf, int size, int pos){
-	printf("blocksize %d\n", BLOCKSIZE);
 	struct inode* inode = decorated_inode->inode;
 
 	void* block_data = malloc(BLOCKSIZE);
 	
 	int i = pos/BLOCKSIZE;
 	if ((pos + size)/BLOCKSIZE != i){
-		printf("we're here\n");
 		int index = 0;
 		int remaining = size;
 		if (inode->direct[i] == 0){
@@ -193,7 +192,7 @@ int add_data(struct decorated_inode* decorated_inode, void* data_buf, int size, 
 		memset(block_data,0, BLOCKSIZE);
 		if (inode->direct[(pos+size)/BLOCKSIZE] == 0){
 			struct free_data_block* blk = alloc_free_block();
-			inode->direct[i] = blk->block_num;
+			inode->direct[(pos+size)/BLOCKSIZE] = blk->block_num;
 		}
 		ReadSector(inode->direct[(pos+size)/BLOCKSIZE], block_data);
 		memcpy(block_data, data_buf + index, remaining);
