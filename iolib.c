@@ -80,3 +80,22 @@ int Write(int fd, void *buf, int size){
 	open_file_table[fd].pos+=size;
 	return open_file_table[fd].pos;
 }
+
+int Read(int fd, void* buf, int size) {
+	init();
+	struct my_msg read_msg;
+	read_msg.type = READ;
+	read_msg.ptr = buf;
+	read_msg.data0 = open_file_table[fd].inum;
+	read_msg.data1 = size;
+	read_msg.data3 = 0;
+	// read_msg.data3 = open_file_table[fd].pos;
+	printf("iolib: Reading\n");
+	int amntRead = Send(&read_msg, -FILE_SERVER);
+	if (amntRead == -1) {
+		printf("Iolib: ERROR Reading\n");
+		return ERROR;
+	}
+	open_file_table[fd].pos += amntRead;
+	return amntRead;	
+}

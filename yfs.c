@@ -155,12 +155,34 @@ int add_dir_entry(struct decorated_inode* decorated_inode, struct dir_entry* new
 	free(block_data);
 	return -1; 
 }
+int read_data(struct decorated_inode* decorated_inode, void* data_buf, int size, int pos){
+	struct inode* inode = decorated_inode->inode;
+	void* block_data = malloc(BLOCKSIZE);
+	int i = pos/BLOCKSIZE;
+	int remaining = 0;
+
+	if (pos+size > inode->size) {
+		remaining = inode->size;
+	}
+	else {
+		remaining = pos+size;
+	}
+	
+	if (inode->direct[i] != 0){
+		ReadSector(inode->direct[i], block_data);
+		memcpy(block_data + pos - i * BLOCKSIZE, data_buf, remaining);
+		return remaining;
+	}
+
+	return 0;
+
+}
 
 int add_data(struct decorated_inode* decorated_inode, void* data_buf, int size, int pos){
 	struct inode* inode = decorated_inode->inode;
-
 	void* block_data = malloc(BLOCKSIZE);
-	
+	inode->size += size; // TODO not always true if out of sizes;
+
 	int i = pos/BLOCKSIZE;
 	if ((pos + size)/BLOCKSIZE != i){
 		int index = 0;
@@ -231,9 +253,30 @@ int create_file(char* filepath) {
 	add_dir_entry(dir_inode, new_file);
 	return new_file->inum;
 }
+int read_file(int inum, void* client_buf, int size, int srcpid, int pos){
+	struct decorated_inode* inode = get_inode(inum);
 
+	if (inode->inode->type != INODE_REGULAR && inode->inode->type != INODE_DIRECTORY) {
+		printf("Error: Inode not file or directory\n");
+		return ERROR;
+	}
+
+	void* server_buf = malloc(size);
+	read_data(inode, server_buf, size, pos);
+	int result = CopyTo(srcpid, client_buf, server_buf, size);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+	return 0;
+}
 int write_file(int inum, void* client_buf, int size, int srcpid, int pos){
 	struct decorated_inode* inode = get_inode(inum);
+	if (inode->inode->type != INODE_REGULAR) {
+		printf("Error: Inode not file\n");
+		return ERROR;
+	}
 	void* server_buf = malloc(size);
 	int result = CopyFrom(srcpid, server_buf, client_buf, size);
 	if (result != 0){
@@ -360,6 +403,13 @@ int main(int argc, char* argv[]) {
 		if (msg_buf->type == WRITE){
 			printf("writing file!\n");
 			int result = write_file(msg_buf->data0, msg_buf->ptr, msg_buf->data1, pid, msg_buf->data3);
+			if (Reply(msg_buf, pid) != 0) {
+				printf("Error replying\n");
+			}
+		}
+		if (msg_buf->type == READ){
+			printf("reading file!\n");
+			int result = read_file(msg_buf->data0, msg_buf->ptr, msg_buf->data1, pid, msg_buf->data3);
 			if (Reply(msg_buf, pid) != 0) {
 				printf("Error replying\n");
 			}
