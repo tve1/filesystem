@@ -290,6 +290,15 @@ int create_file(char* filepath) {
 	add_dir_entry(dir_inode, new_file);
 	return new_file->inum;
 }
+
+int open_file(char* filepath) {
+	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
+	//check if file or directory
+	if (dir_inode != NULL){
+		return dir_inode->inum;
+	}
+}
+
 int read_file(int inum, void* client_buf, int size, int srcpid, int pos){
 	struct decorated_inode* inode = get_inode(inum);
 
@@ -449,6 +458,17 @@ int main(int argc, char* argv[]) {
 			int result = read_file(msg_buf->data0, msg_buf->ptr, msg_buf->data1, pid, msg_buf->data3);
 			if (Reply(msg_buf, pid) != 0) {
 				printf("Error replying\n");
+			}
+		}
+		if (msg_buf->type == OPEN){
+			printf("opening file %s\n", msg_buf->data2);
+			//open_file will return the inum of the pathname if the file exists
+			//idk how to handle if open is called on a directory but i guess that'll happen in open_file
+			//until we can't let go is growing on me
+			int result = open_file(msg_buf->data2);
+			msg_buf->data1 = result;
+			if (Reply(msg_buf, pid) != 0){
+				printf("error opening\n");
 			}
 		}
 	}
