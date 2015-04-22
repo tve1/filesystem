@@ -2,6 +2,7 @@
 #define WRITE 1
 #define READ 2
 #define OPEN 3
+#define SEEK 4
 #define DATA2LENGTH 16
 struct my_msg {
 	short type;

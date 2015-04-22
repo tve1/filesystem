@@ -103,7 +103,7 @@ int Read(int fd, void* buf, int size) {
 int Open(char* pathname){
 	init();
 	struct my_msg open_msg;
-	create_msg.type = OPEN;
+	open_msg.type = OPEN;
 	int i;
 	for (i = 0; i < DATA2LENGTH; i++) {
 		open_msg.data2[i] = pathname[i];
@@ -117,7 +117,7 @@ int Open(char* pathname){
 	for (j=0; j < MAX_OPEN_FILES; j++){
 		if (open_file_table[j].is_open == 0){
 			open_file_table[j].is_open = 1;
-			open_file_table[j].inum = create_msg.data1;
+			open_file_table[j].inum = open_msg.data1;
 			open_file_table[j].pos = 0;
 			return j;
 		}
@@ -132,40 +132,51 @@ int Open(char* pathname){
 int Close(int fd){
 	init();
 	//do i not need to send a message to yfs??
-	if (fd > MAX_OPEN_FILES || fd < 0 || open_file_table[fd].isopen == 0){
+	if (fd > MAX_OPEN_FILES || fd < 0 || open_file_table[fd].is_open == 0){
 		return ERROR;
 	}
 	open_file_table[fd].inum = 0;
 	open_file_table[fd].pos = 0;
-	open_file_table[fd].isopen = 0;
+	open_file_table[fd].is_open = 0;
 	return 0;
 }
 
 int Seek(int fd, int offset, int whence){
+	init();
+
+	struct my_msg seek_msg;
+	seek_msg.type = SEEK;
+	seek_msg.data0 = open_file_table[fd].inum;
+	if (Send(&seek_msg, -FILE_SERVER) != 0) {
+		printf("Error seeking file\n");
+		return ERROR;
+	}
+
+	int filesize = seek_msg.data1;
+
 	if (whence == SEEK_SET){
-		if (offset < 0){
+		if (offset < 0 || offset > filesize){
 			return ERROR;
 		}
 		open_file_table[fd].pos = offset;
-		return offset;
 	}
-	if (whence == SEEK_CUR){
+
+	if (whence == SEEK_CUR) {
 		int sought = open_file_table[fd].pos + offset;
 		//should we add size of file to open_file? probssssss
-		if ( sought < 0 || sought > THISSHOULDBEFILESIZE){
+		if ( sought < 0 || sought > filesize){
 			return ERROR;
 		}
 		open_file_table[fd].pos = sought;
-		return sought;
-
 	}
 
 	if (whence == SEEK_END){
 		if (offset > 0){
 			return ERROR;
 		}
-		open_file_table[fd].pos = THISSHOULDBEFILESIZE;
-		return THISSHOULDBEFILESIZE;
+
+		open_file_table[fd].pos = filesize + offset;
 	}
+		return open_file_table[fd].pos;
 
 }

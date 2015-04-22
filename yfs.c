@@ -334,6 +334,10 @@ int write_file(int inum, void* client_buf, int size, int srcpid, int pos){
 	return 0;
 
 }
+int seek_file(int inum) {
+	struct decorated_inode* inode = get_inode(inum);
+	return inode->inode->size;
+}
 
 void free_data_block_num(int cur_block_num) {
 	if (cur_block_num != 0) {
@@ -437,7 +441,7 @@ int main(int argc, char* argv[]) {
 		if (pid == ERROR) {
 			printf("Error receiving\n");
 		}
-		printf("Received message\n");
+		printf("Received message %d\n", msg_buf->type);
 		if (msg_buf->type == CREATE) {
 			printf("Creating file %s\n", msg_buf->data2);
 			int result = create_file(msg_buf->data2);
@@ -469,6 +473,15 @@ int main(int argc, char* argv[]) {
 			msg_buf->data1 = result;
 			if (Reply(msg_buf, pid) != 0){
 				printf("error opening\n");
+			}
+		}
+		if (msg_buf->type == SEEK){
+			printf("a\n"); 
+			printf("seeking file %d\n", msg_buf->data0);
+			printf("b\n");
+			msg_buf->data1 = seek_file(msg_buf->data0);
+			if (Reply(msg_buf, pid) != 0){
+				printf("error seeking\n");
 			}
 		}
 	}
