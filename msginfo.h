@@ -3,6 +3,7 @@
 #define READ 2
 #define OPEN 3
 #define SEEK 4
+#define MKDIR 5
 #define DATA2LENGTH 16
 struct my_msg {
 	short type;

@@ -59,13 +59,82 @@ struct free_data_block* alloc_free_block() {
 	return blk;
 }
 
-struct decorated_inode* get_directory_inode(char* pathname) {
-	struct decorated_inode* cur = all_inodes;
-	while (cur != NULL){
-		if (cur->inum == ROOTINODE){
-			return cur;
+int get_next_dir_name(char* pathname, int start, char* dir_name_result, int* flag) {
+	int is_done = 0;
+	int spot_in_path = start;
+
+	int q;
+	for (q = 0; q < DIRNAMELEN; q++) {
+		if (pathname[start + q] == '/' || pathname[start + q] == '\0') {
+			if (pathname[start + 1] == '\0') {
+				flag[0] = 1;
+			}
+			if (is_done == 0) {
+				is_done = 1;
+				spot_in_path = start + q;
+			}
 		}
-		cur = cur->next;
+		if (is_done) {
+			dir_name_result[q] = '\0';
+		}
+		else {
+			dir_name_result[q] = pathname[start + q];
+		}
+	}
+	return spot_in_path;
+}
+struct decorated_inode* get_directory_inode(char* pathname) {
+	void* block_data = malloc(BLOCKSIZE);
+	
+	if (pathname[0] == '/') {
+		int spot_in_path = 1;
+		struct decorated_inode* cur = all_inodes;
+		while (cur != NULL){
+			if (cur->inum == ROOTINODE){
+				return cur;
+			}
+			cur = cur->next;
+		}
+
+		struct decorated_inode* root_dir = cur;
+		char* cur_dir_name = malloc(DIRNAMELEN);
+		int* flag = malloc(sizeof(int));
+		while (flag[0] == 0) {
+			int dir_exists = 0;
+
+			spot_in_path = get_next_dir_name(pathname, spot_in_path, cur_dir_name, flag);
+
+			int i;
+			for (i = 0; i < NUM_DIRECT; i++) {
+				if (root_dir->inode->direct[i] != 0) {
+					ReadSector(root_dir->inode->direct[i], block_data);
+					
+					int j;
+					for (j = 0; j < BLOCKSIZE / sizeof(struct dir_entry); j++) {
+						struct dir_entry* cur_dir = (struct dir_entry*)(block_data + sizeof(struct dir_entry) * j);
+						if (cur_dir->inum != 0) {
+							int is_valid = 1;
+			
+							int k;
+							for (k = 0; k < DIRNAMELEN; k++) {
+								if (cur_dir->name[k] != cur_dir_name[k]) {
+									is_valid = 0;
+								}
+							}
+							if (is_valid) {
+			
+								root_dir = get_inode(cur_dir->inum);			
+								dir_exists = 1;
+							}				
+						}
+					}
+				}
+			}
+			if (dir_exists == 0) {
+				printf("Directory does not exist\n");
+				return ERROR;
+			}
+		}
 	}
 	printf("cannot find file\n");
 	return NULL;
@@ -372,6 +441,76 @@ int seek_file(int inum) {
 	return inode->inode->size;
 }
 
+int add_parent_and_self(struct decorated_inode* cur_inode, struct decorated_inode* parent_inode) {
+	printf("adding a new block\n");
+
+	struct free_data_block* blk = alloc_free_block();
+	cur_inode->inode->direct[0] = blk->block_num;
+
+	void* block_data = malloc(BLOCKSIZE);
+	memset(block_data, 0, BLOCKSIZE);
+	
+	struct dir_entry parent_dir;
+	parent_dir.inum = parent_inode->inum;
+	memcpy(parent_dir.name, "..\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", DIRNAMELEN);
+	
+	struct dir_entry self_dir;
+	self_dir.inum  = cur_inode->inum;
+	memcpy(self_dir.name, ".\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", DIRNAMELEN);
+	
+	memcpy(block_data, &parent_dir, sizeof(struct dir_entry));
+	memcpy(block_data + sizeof(struct dir_entry), &self_dir, sizeof(struct dir_entry));
+
+	WriteSector(cur_inode->inode->direct[0], block_data);
+	return 0;
+
+}
+
+int make_directory(char* filepath) {
+	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
+	int i;
+	char* dir_name = get_filename(filepath);
+
+	void* block_data = malloc(BLOCKSIZE);
+	memset(block_data, 0, BLOCKSIZE);
+	for (i = 0; i < NUM_DIRECT; i++) {
+		if (dir_inode->inode->direct[i] != 0) {
+			ReadSector(dir_inode->inode->direct[i], block_data);
+			
+			int j;
+			for (j = 0; j < BLOCKSIZE / sizeof(struct dir_entry); j++) {
+				struct dir_entry* cur_dir = (struct dir_entry*)(block_data + sizeof(struct dir_entry) * j);
+				if (cur_dir->inum != 0) {
+					int is_valid = 1;
+	
+					int k;
+					for (k = 0; k < DIRNAMELEN; k++) {
+						if (cur_dir->name[k] != dir_name[k]) {
+							is_valid = 0;
+						}
+					}
+					if (is_valid) {
+						printf("Error, directory already exists\n");
+						return ERROR;
+					}				
+				}
+			}
+		}
+	}
+
+	struct dir_entry* new_directory = malloc(sizeof(struct dir_entry));
+	struct decorated_inode* new_inode = alloc_free_inode();
+	new_inode->inode->type = INODE_DIRECTORY;
+	new_inode->inode->nlink = 1;
+	new_inode->inode->reuse++;
+	new_inode->inode->size = 0;
+	new_directory->inum = new_inode->inum;
+	memcpy(new_directory->name, dir_name, DIRNAMELEN);
+	add_dir_entry(dir_inode, new_directory);
+	add_parent_and_self(new_inode, dir_inode);
+	return 0;
+}
+
 void free_data_block_num(int cur_block_num) {
 	if (cur_block_num != 0) {
 		struct free_data_block* prev_data_block = NULL;
@@ -486,6 +625,7 @@ int main(int argc, char* argv[]) {
 		if (msg_buf->type == WRITE){
 			printf("writing file!\n");
 			int result = write_file(msg_buf->data0, msg_buf->ptr, msg_buf->data1, pid, msg_buf->data3);
+			msg_buf->data1 = result;
 			if (Reply(msg_buf, pid) != 0) {
 				printf("Error replying\n");
 			}
@@ -493,6 +633,7 @@ int main(int argc, char* argv[]) {
 		if (msg_buf->type == READ){
 			printf("reading file!\n");
 			int result = read_file(msg_buf->data0, msg_buf->ptr, msg_buf->data1, pid, msg_buf->data3);
+			msg_buf->data1 = result;
 			if (Reply(msg_buf, pid) != 0) {
 				printf("Error replying\n");
 			}
@@ -509,10 +650,13 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		if (msg_buf->type == SEEK){
-			printf("a\n"); 
-			printf("seeking file %d\n", msg_buf->data0);
-			printf("b\n");
 			msg_buf->data1 = seek_file(msg_buf->data0);
+			if (Reply(msg_buf, pid) != 0){
+				printf("error seeking\n");
+			}
+		}
+		if (msg_buf->type == MKDIR){
+			msg_buf->data0 = make_directory(msg_buf->data2);
 			if (Reply(msg_buf, pid) != 0){
 				printf("error seeking\n");
 			}

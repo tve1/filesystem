@@ -13,18 +13,18 @@ int
 main()
 {
 	int fd;
-	char* result = malloc(2);
+	char* result = malloc(16);
 	printf("Sample 1 -- creating file \n");
-	fd = Create("/abc.txt");
-	Write(fd, "abcdefghij", 10);
-	Close(fd);
-	Open("/abc.txt");
-	Read(fd, result, 10);
-	printf("result %s\n", result);
+	fd = MkDir("/newdir");
 	
-	// fd = Create("b");
-	// Write(fd, "bbbbbbbbbbbbbbbb", 16);
-	// Close(fd);
+	printf("result %d\n", fd);
+	
+	fd = Create("/newdir/c.txt");
+	Write(fd, "bbbbbbbbbbbbbbb\0", 16);
+	Seek(fd, 0, SEEK_SET);
+	Read(fd, result, 16);
+	printf("This worked eh? %s\n", result);
+	Close(fd);
 
 	// fd = Create("c");
 	// Write(fd, "cccccccccccccccc", 16);

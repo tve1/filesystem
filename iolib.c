@@ -180,6 +180,24 @@ int Seek(int fd, int offset, int whence){
 
 		open_file_table[fd].pos = filesize + offset;
 	}
-		return open_file_table[fd].pos;
+	return open_file_table[fd].pos;
+}
 
+int MkDir(char* pathname) {
+	init();
+
+	struct my_msg mkdir_msg;
+	mkdir_msg.type = MKDIR;
+
+	int i;
+	for (i = 0; i < DATA2LENGTH; i++) {
+		mkdir_msg.data2[i] = pathname[i];
+	}
+	printf("sending\n");
+	if (Send(&mkdir_msg, -FILE_SERVER) != 0) {
+		printf("Error making directory file\n");
+		return ERROR;
+	} 
+
+	return mkdir_msg.data0;
 }
