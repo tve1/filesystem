@@ -124,6 +124,7 @@ int add_dir_entry(struct decorated_inode* decorated_inode, struct dir_entry* new
 				struct dir_entry* cur = (struct dir_entry *) ((unsigned long)block_data + j * sizeof(struct dir_entry));
 				if (cur->inum == 0) {
 					memcpy((struct dir_entry *) ((unsigned long)block_data + j * sizeof(struct dir_entry)), new_dir_entry, sizeof(struct  dir_entry));
+					printf("writing dir entry with inum %d\n", new_dir_entry->inum);
 					WriteSector(inode->direct[i], block_data);
 					return 0;
 				}
@@ -286,17 +287,49 @@ int create_file(char* filepath) {
 	new_inode->inode->reuse++;
 	new_inode->inode->size = 0;
 	new_file->inum = new_inode->inum;
-	memcpy(new_file->name, filepath, DIRNAMELEN);
+	memcpy(new_file->name, get_filename(filepath), DIRNAMELEN);
 	add_dir_entry(dir_inode, new_file);
 	return new_file->inum;
 }
 
 int open_file(char* filepath) {
 	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
-	//check if file or directory
-	if (dir_inode != NULL){
-		return dir_inode->inum;
+	int i;
+	char* filename = get_filename(filepath);
+
+	void* block_data = malloc(BLOCKSIZE);
+	memset(block_data, 0, BLOCKSIZE);
+	for (i = 0; i < NUM_DIRECT; i++) {
+		if (dir_inode->inode->direct[i] != 0) {
+			ReadSector(dir_inode->inode->direct[i], block_data);
+			
+			int j;
+			for (j = 0; j < BLOCKSIZE / sizeof(struct dir_entry); j++) {
+				struct dir_entry* cur_dir = (struct dir_entry*)(block_data + sizeof(struct dir_entry) * j);
+				if (cur_dir->inum != 0) {
+					int is_valid = 1;
+					printf("c %d\n", cur_dir->inum);
+
+					int k;
+					for (k = 0; k < DIRNAMELEN; k++) {
+						if (cur_dir->name[k] != filename[k]) {
+							is_valid = 0;
+						}
+					}
+					if (is_valid) {
+						struct decorated_inode *file_node = get_inode(cur_dir->inum);
+						if (file_node->inode->type != INODE_REGULAR && file_node->inode->type != INODE_DIRECTORY) {
+							printf("Error: Inode not file or directory\n");
+							return ERROR;
+						}
+						return cur_dir->inum;
+					}				
+				}
+			}
+		}
 	}
+	printf(" Open found error \n");
+	return ERROR;
 }
 
 int read_file(int inum, void* client_buf, int size, int srcpid, int pos){

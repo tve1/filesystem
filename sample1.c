@@ -15,20 +15,13 @@ main()
 	int fd;
 	char* result = malloc(2);
 	printf("Sample 1 -- creating file \n");
-	fd = Create("/b");
-	printf("Done creating %d\n", fd);
-
-	Write(fd, "abc", 3);
-	Read(fd, result, 3);
-	printf("result %s\n", result);
-	Seek(fd, 1, SEEK_SET);
-	Write(fd, "abc", 3);
-	Seek(fd, 0, SEEK_SET);
-	Read(fd, result, 4);
-	// result[200] = '\0';	
-	printf("result now is %s\n", result);
+	fd = Create("/abc.txt");
+	Write(fd, "abcdefghij", 10);
 	Close(fd);
-
+	Open("/abc.txt");
+	Read(fd, result, 10);
+	printf("result %s\n", result);
+	
 	// fd = Create("b");
 	// Write(fd, "bbbbbbbbbbbbbbbb", 16);
 	// Close(fd);

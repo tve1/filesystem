@@ -113,6 +113,9 @@ int Open(char* pathname){
 		printf("Error opening file\n");
 		return ERROR;
 	} 
+	if (open_msg.data1 == -1) {
+		return ERROR;
+	}
 	int j;
 	for (j=0; j < MAX_OPEN_FILES; j++){
 		if (open_file_table[j].is_open == 0){
