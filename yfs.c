@@ -143,7 +143,7 @@ struct decorated_inode* get_directory_inode(char* pathname) {
 			}
 			if (dir_exists == 0) {
 				printf("Directory %s does not exist\n", pathname);
-				return ERROR;
+				return NULL;
 			}
 		}
 	}
@@ -383,6 +383,9 @@ int create_file(int srcpid, void* client_buf) {
 	}
 	printf("filepath %s\n", filepath);
 	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
+	if (dir_inode == NULL) {
+		return ERROR;
+	}
 	struct decorated_inode* new_inode = alloc_free_inode();
 	new_inode->inode->type = INODE_REGULAR;
 	new_inode->inode->nlink = 1;
@@ -404,6 +407,9 @@ int open_file(int srcpid, void* client_buf) {
 	}
 
 	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
+	if (dir_inode == NULL) {
+		return ERROR;
+	}
 	int i;
 	char* filename = get_filename(filepath);
 
@@ -520,6 +526,9 @@ int make_directory(char* filepath) {
 	// }
 	printf("Making directory %s\n", filepath);
 	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
+	if (dir_inode == NULL) {
+		return ERROR;
+	}
 	int i;
 	char* dir_name = get_filename(filepath);
 	void* block_data = malloc(BLOCKSIZE);
@@ -713,6 +722,7 @@ int main(int argc, char* argv[]) {
 		
 		if (pid == ERROR) {
 			printf("Error receiving\n");
+			break;
 		}
 		printf("Received message %d\n", msg_buf->type);
 		if (msg_buf->type == CREATE) {

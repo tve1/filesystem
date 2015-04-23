@@ -23,7 +23,7 @@ main()
 	// for (i = 0; i < 100; i++) {
 	// 	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");
 	// }
-	// fd = MkDir("/newdir/one");
+	fd = MkDir("/newdir/one");
 	// fd = ChDir("/newdir");
 	// fd = ChDir("one");
 	// fd = ChDir("..");
@@ -63,3 +63,4 @@ main()
 	//Shutdown();
 	return 0;
 }
+ 
