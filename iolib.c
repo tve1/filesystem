@@ -25,6 +25,7 @@ void init(){
 	printf("init\n");
 	if (is_init == 0) {
 		cur_dir = malloc(MAXPATHNAMELEN);
+		memset(cur_dir, 0, MAXPATHNAMELEN);
 		int i;
 		for (i=0; i < MAX_OPEN_FILES; i++) {
 			struct open_file file;
@@ -38,32 +39,52 @@ void init(){
 
 }
 
+int is_relative(char* pathname){
+	if (pathname[0] == '/'){
+		return 0;
+	}
+	return 1;
+}
+
+char* add_cur_dir_to(char* pathname){
+	char* result = malloc(MAXPATHNAMELEN);
+	memset(result, 0, MAXPATHNAMELEN);
+	memcpy(result, cur_dir, strlen(cur_dir));
+	result[strlen(cur_dir)] = '/'; 
+	memcpy(result + strlen(cur_dir) + 1, pathname, strlen(pathname));
+	//result[strlen(cur_dir) + strlen(pathname) + 1) = '/0';
+	return result;
+}
+
 int Create(char *pathname) 
 {
 	init();
-		struct my_msg create_msg;
-		create_msg.type = CREATE;
-		int i;
-		for (i = 0; i < DATA2LENGTH; i++) {
-			create_msg.data2[i] = pathname[i];
-		}
-		create_msg.ptr = pathname;
-		printf("sending\n");
-		if (Send(&create_msg, -FILE_SERVER) != 0) {
-			printf("Error creating file\n");
-			return ERROR;
-		} 
-		int j;
-		for (j=0; j < MAX_OPEN_FILES; j++){
-			if (open_file_table[j].is_open == 0){
-				open_file_table[j].is_open = 1;
-				open_file_table[j].inum = create_msg.data1;
-				open_file_table[j].pos = 0;
-				return j;
-			}
-		}
-		printf("no open files in table\n");
+	struct my_msg create_msg;
+	create_msg.type = CREATE;
+	if (is_relative(pathname) == 1){
+		pathname = add_cur_dir_to(pathname);
+	}
+	int i;
+	for (i = 0; i < DATA2LENGTH; i++) {
+		create_msg.data2[i] = pathname[i];
+	}
+	create_msg.ptr = pathname;
+	printf("sending\n");
+	if (Send(&create_msg, -FILE_SERVER) != 0) {
+		printf("Error creating file\n");
 		return ERROR;
+	} 
+	int j;
+	for (j=0; j < MAX_OPEN_FILES; j++){
+		if (open_file_table[j].is_open == 0){
+			open_file_table[j].is_open = 1;
+			open_file_table[j].inum = create_msg.data1;
+			open_file_table[j].pos = 0;
+			return j;
+		}
+	}
+	printf("no open files in table\n");
+	return ERROR;
 
 }
 
@@ -107,6 +128,9 @@ int Open(char* pathname){
 	init();
 	struct my_msg open_msg;
 	open_msg.type = OPEN;
+	if (is_relative(pathname) == 1){
+		pathname = add_cur_dir_to(pathname);
+	}
 	int i;
 	for (i = 0; i < DATA2LENGTH; i++) {
 		open_msg.data2[i] = pathname[i];
@@ -187,11 +211,15 @@ int Seek(int fd, int offset, int whence){
 	return open_file_table[fd].pos;
 }
 
+
+
 int MkDir(char* pathname) {
 	init();
 	struct my_msg mkdir_msg;
 	mkdir_msg.type = MKDIR;
-
+	if (is_relative(pathname) == 1){
+		pathname = add_cur_dir_to(pathname);
+	}
 	int i;
 	for (i = 0; i < DATA2LENGTH; i++) {
 		mkdir_msg.data2[i] = pathname[i];
@@ -210,7 +238,9 @@ int ChDir(char* pathname){
 	init();
 	struct my_msg chdir_msg;
 	chdir_msg.type = CHDIR;
-	
+	if (is_relative(pathname) == 1){
+		pathname = add_cur_dir_to(pathname);
+	}
 	int i;
 	for (i = 0; i < DATA2LENGTH; i++) {
 		chdir_msg.data2[i] = pathname[i];
@@ -218,11 +248,13 @@ int ChDir(char* pathname){
 	if (Send(&chdir_msg, -FILE_SERVER) != 0) {
 		printf("Error changing direc file\n");
 		return ERROR;
-	} 
-	if (chdir_msg.data0 == 0){
-		memcpy(cur_dir, pathname, strlen(pathname));
-		printf("directory is now %s\n", cur_dir);
-		return 0;
+	}
+	if (is_relative(pathname) == 0){ 
+		if (chdir_msg.data0 == 0){
+			memcpy(cur_dir, pathname, strlen(pathname));
+			printf("directory is now %s\n", cur_dir);
+			return 0;
+		}
 	}
 	return ERROR;
 

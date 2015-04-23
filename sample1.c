@@ -17,8 +17,11 @@ main()
 	printf("Sample 1 -- creating file \n");
 	printf("making dir newdir\n");
 	fd = MkDir("/newdir");
+
+	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");
 	fd = MkDir("/newdir/one");
 	fd = ChDir("/newdir");
+	fd = ChDir("one");
 
 	// printf("making dir newdir/foo\n");
 	// fd = MkDir("/newdir/foo");

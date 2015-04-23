@@ -142,7 +142,7 @@ struct decorated_inode* get_directory_inode(char* pathname) {
 				}
 			}
 			if (dir_exists == 0) {
-				printf("Directory does not exist\n");
+				printf("Directory %s does not exist\n", pathname);
 				return ERROR;
 			}
 		}
