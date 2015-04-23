@@ -17,11 +17,14 @@ struct open_file {
 
 struct open_file open_file_table[MAX_OPEN_FILES];
 
+char* cur_dir;
+
 int is_init = 0;
 
 void init(){
 	printf("init\n");
-	if (is_init == 0) { 
+	if (is_init == 0) {
+		cur_dir = malloc(MAXPATHNAMELEN);
 		int i;
 		for (i=0; i < MAX_OPEN_FILES; i++) {
 			struct open_file file;
@@ -38,13 +41,13 @@ void init(){
 int Create(char *pathname) 
 {
 	init();
-	printf("in iolib\n");
 		struct my_msg create_msg;
 		create_msg.type = CREATE;
 		int i;
 		for (i = 0; i < DATA2LENGTH; i++) {
 			create_msg.data2[i] = pathname[i];
 		}
+		create_msg.ptr = pathname;
 		printf("sending\n");
 		if (Send(&create_msg, -FILE_SERVER) != 0) {
 			printf("Error creating file\n");
@@ -109,6 +112,7 @@ int Open(char* pathname){
 		open_msg.data2[i] = pathname[i];
 	}
 	printf("opening\n");
+	open_msg.ptr = pathname;
 	if (Send(&open_msg, -FILE_SERVER) != 0) {
 		printf("Error opening file\n");
 		return ERROR;
@@ -185,7 +189,6 @@ int Seek(int fd, int offset, int whence){
 
 int MkDir(char* pathname) {
 	init();
-
 	struct my_msg mkdir_msg;
 	mkdir_msg.type = MKDIR;
 
@@ -193,11 +196,34 @@ int MkDir(char* pathname) {
 	for (i = 0; i < DATA2LENGTH; i++) {
 		mkdir_msg.data2[i] = pathname[i];
 	}
+	mkdir_msg.ptr = pathname;
 	printf("sending\n");
 	if (Send(&mkdir_msg, -FILE_SERVER) != 0) {
-		printf("Error making directory file\n");
+		printf("Error making direc file\n");
 		return ERROR;
 	} 
 
 	return mkdir_msg.data0;
+}
+
+int ChDir(char* pathname){
+	init();
+	struct my_msg chdir_msg;
+	chdir_msg.type = CHDIR;
+	
+	int i;
+	for (i = 0; i < DATA2LENGTH; i++) {
+		chdir_msg.data2[i] = pathname[i];
+	}
+	if (Send(&chdir_msg, -FILE_SERVER) != 0) {
+		printf("Error changing direc file\n");
+		return ERROR;
+	} 
+	if (chdir_msg.data0 == 0){
+		memcpy(cur_dir, pathname, strlen(pathname));
+		printf("directory is now %s\n", cur_dir);
+		return 0;
+	}
+	return ERROR;
+
 }

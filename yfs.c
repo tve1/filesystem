@@ -27,6 +27,8 @@ int cur_directory_inode;
 
 struct my_msg* msg_buf;
 
+struct decorated_inode* current_directory_inode;
+
 struct decorated_inode* alloc_free_inode(){
 	struct decorated_inode* inode = all_inodes;
 	while (inode != NULL && inode->inode->type != INODE_FREE){
@@ -360,10 +362,22 @@ int add_data(struct decorated_inode* decorated_inode, void* data_buf, int size, 
 
 }
 
-int create_file(char* filepath) {
+int create_file(int srcpid, void* client_buf) {
 
-	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
 	struct dir_entry* new_file = malloc(sizeof(struct dir_entry));
+
+	char* filepath = malloc(MAXPATHNAMELEN);
+	
+	printf(" ---------%d %p %p %d\n", srcpid, filepath, client_buf, MAXPATHNAMELEN);
+	
+	int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+	printf("filepath %s\n", filepath);
+	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
 	struct decorated_inode* new_inode = alloc_free_inode();
 	new_inode->inode->type = INODE_REGULAR;
 	new_inode->inode->nlink = 1;
@@ -375,7 +389,15 @@ int create_file(char* filepath) {
 	return new_file->inum;
 }
 
-int open_file(char* filepath) {
+int open_file(int srcpid, void* client_buf) {
+	char* filepath = malloc(MAXPATHNAMELEN);
+	int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+
 	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
 	int i;
 	char* filename = get_filename(filepath);
@@ -480,6 +502,17 @@ int add_parent_and_self(struct decorated_inode* cur_inode, struct decorated_inod
 }
 
 int make_directory(char* filepath) {
+	// char* filepath = malloc(MAXPATHNAMELEN);
+	
+	// printf(" ---------%d %p %p %d\n", srcpid, filepath, client_buf, MAXPATHNAMELEN);
+	
+	// int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
+	
+	// if (result != 0) {
+	// 	printf("Error copying data\n");
+	// 	return ERROR;
+	// }
+	printf("Making directory %s\n", filepath);
 	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
 	int i;
 	char* dir_name = get_filename(filepath);
@@ -510,6 +543,8 @@ int make_directory(char* filepath) {
 		}
 	}
 
+
+
 	struct dir_entry* new_directory = malloc(sizeof(struct dir_entry));
 	struct decorated_inode* new_inode = alloc_free_inode();
 	new_inode->inode->type = INODE_DIRECTORY;
@@ -521,6 +556,15 @@ int make_directory(char* filepath) {
 	memcpy(new_directory->name, dir_name, DIRNAMELEN);
 	add_dir_entry(dir_inode, new_directory);
 	add_parent_and_self(new_inode, dir_inode);
+	return 0;
+}
+
+int change_directory(char* filepath){
+	struct decorated_inode* dir_inode = get_directory_inode(filepath);
+	if (dir_inode == NULL || dir_inode->inode->type != INODE_DIRECTORY){
+		printf("%s is not a directory\n", filepath);
+		return ERROR;
+	}
 	return 0;
 }
 
@@ -624,8 +668,8 @@ int main(int argc, char* argv[]) {
 		}
 		printf("Received message %d\n", msg_buf->type);
 		if (msg_buf->type == CREATE) {
-			printf("Creating file %s\n", msg_buf->data2);
-			int result = create_file(msg_buf->data2);
+			printf("Creating file %p\n", msg_buf->ptr);
+			int result = create_file(pid, msg_buf->ptr);
 			msg_buf->data1 = result;
 			if (Reply(msg_buf, pid) != 0) {
 				printf("Error replying\n");
@@ -652,7 +696,7 @@ int main(int argc, char* argv[]) {
 			//open_file will return the inum of the pathname if the file exists
 			//idk how to handle if open is called on a directory but i guess that'll happen in open_file
 			//until we can't let go is growing on me
-			int result = open_file(msg_buf->data2);
+			int result = open_file(pid, msg_buf->ptr);
 			msg_buf->data1 = result;
 			if (Reply(msg_buf, pid) != 0){
 				printf("error opening\n");
@@ -666,6 +710,12 @@ int main(int argc, char* argv[]) {
 		}
 		if (msg_buf->type == MKDIR){
 			msg_buf->data0 = make_directory(msg_buf->data2);
+			if (Reply(msg_buf, pid) != 0){
+				printf("error seeking\n");
+			}
+		}
+		if (msg_buf->type == CHDIR){
+			msg_buf->data0 = change_directory(msg_buf->data2);
 			if (Reply(msg_buf, pid) != 0){
 				printf("error seeking\n");
 			}

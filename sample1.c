@@ -17,16 +17,21 @@ main()
 	printf("Sample 1 -- creating file \n");
 	printf("making dir newdir\n");
 	fd = MkDir("/newdir");
-	printf("making dir newdir/foo\n");
-	fd = MkDir("/newdir/foo");
+	fd = MkDir("/newdir/one");
+	fd = ChDir("/newdir");
+
+	// printf("making dir newdir/foo\n");
+	// fd = MkDir("/newdir/foo");
 	
-	printf("result %d\n", fd);
+	// printf("result %d\n", fd);
 	
-	fd = Create("/newdiraaa/c.txt");
-	Write(fd, "abcdfg\0", 16);
-	Seek(fd, 0, SEEK_SET);
-	Read(fd, result, 16);
-	printf("This worked eh? %s\n", result);
+	// fd = Create("/newdir/c.txt");
+	// Close(fd);
+	// fd = Open("/newdir/c.txt");
+	// Write(fd, "abcdfg\0", 16);
+	// Seek(fd, 0, SEEK_SET);
+	// Read(fd, result, 16);
+	// printf("This worked eh? %s\n", result);
 	Close(fd);
 
 	// fd = Create("c");
