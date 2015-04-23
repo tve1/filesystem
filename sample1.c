@@ -22,7 +22,7 @@ main()
 	char* result = malloc(16);
 	printf("Sample 1 -- creating file \n");
 	// printf("making dir newdir\n");
-	fd = MkDir("/hello");
+	// fd = MkDir("/hello");
 	// fd = ChDir("///./neabcdefghijklmnopqt");
 
 	// int i;
@@ -39,17 +39,17 @@ main()
 	
 	// // printf("result %d\n", fd);
 	
-	fd = Create("c.txt");
-	Close(fd);
-	fd = Open("c.txt");
-	Write(fd, "aaa\0", 4);
-	struct Stat* statbuf = malloc(sizeof(struct Stat));
-	int a = Stat("/hello", statbuf);
-	printf("Stat: %d\n", a);
-	printStat(statbuf);
-	printf("This worked eh? %s\n", result);
-	Close(fd);
+	// fd = Create("c.txt");
+	// Write(fd, "aaa\0", 4);
+	// Close(fd);
 
+	// Sync();
+
+	fd = Open("c.txt");
+	Read(fd, result, 3);
+	Close(fd);
+	printf("Result is %s\n", result);
+	
 	// fd = Create("c");
 	// Write(fd, "cccccccccccccccc", 16);
 	// Close(fd);

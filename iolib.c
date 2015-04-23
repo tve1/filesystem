@@ -296,4 +296,16 @@ int Stat(char* pathname, struct Stat *statbuf) {
 	}
 	memcpy(statbuf, buf, sizeof(struct Stat));
 	return stat_msg.data0; 
+}	
+
+int Sync() {
+	init();
+	struct my_msg sync_msg;
+	sync_msg.type = SYNC;
+	if (Send(&sync_msg, -FILE_SERVER) != 0) {
+		printf("Error sync\n");
+		return ERROR;
+	}
+	return sync_msg.data0;
+
 }

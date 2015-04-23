@@ -705,6 +705,28 @@ int stat(int srcpid, void* client_buf) {
 	return 0;
 }
 
+int sync_all() {
+	int index = 0;
+	int cur_sector = 0;
+	struct decorated_inode* cur = all_inodes;
+	
+	void* block_data = malloc(BLOCKSIZE);
+	while(cur != NULL) {
+		memcpy(block_data + index * INODESIZE, cur->inode, INODESIZE);
+		index++;
+		if (index == BLOCKSIZE / INODESIZE) {
+			//write inodes to file;
+			index = 0;
+			printf("Writing sector %d\n", cur_sector);
+			WriteSector(cur_sector, block_data);
+			cur_sector++;	
+		}
+		cur = cur->next;
+	}
+	free(block_data);
+	return 0;
+}
+
 int main(int argc, char* argv[]) {
 	msg_buf = malloc(sizeof(struct my_msg));
 	struct fs_header* header = malloc(SECTORSIZE);
@@ -838,7 +860,14 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		if (msg_buf->type == STAT) {
+
 			msg_buf->data0 = stat(pid, msg_buf->ptr);
+			if (Reply(msg_buf, pid) != 0){
+				printf("error removing directory\n");
+			}
+		}
+		if (msg_buf->type == SYNC) {
+			msg_buf->data0 = sync_all();
 			if (Reply(msg_buf, pid) != 0){
 				printf("error removing directory\n");
 			}
