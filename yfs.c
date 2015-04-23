@@ -397,21 +397,8 @@ int create_file(int srcpid, void* client_buf) {
 	return new_file->inum;
 }
 
-int open_file(int srcpid, void* client_buf) {
-	char* filepath = malloc(MAXPATHNAMELEN);
-	int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
-	
-	if (result != 0) {
-		printf("Error copying data\n");
-		return ERROR;
-	}
-
-	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
-	if (dir_inode == NULL) {
-		return ERROR;
-	}
+struct decorated_inode* get_file_inode(struct decorated_inode* dir_inode, char* filename) {
 	int i;
-	char* filename = get_filename(filepath);
 
 	void* block_data = malloc(BLOCKSIZE);
 	memset(block_data, 0, BLOCKSIZE);
@@ -433,15 +420,34 @@ int open_file(int srcpid, void* client_buf) {
 					}
 					if (is_valid) {
 						struct decorated_inode *file_node = get_inode(cur_dir->inum);
-						if (file_node->inode->type != INODE_REGULAR && file_node->inode->type != INODE_DIRECTORY) {
-							printf("Error: Inode not file or directory\n");
-							return ERROR;
-						}
-						return cur_dir->inum;
+						  
+						return file_node;
 					}				
 				}
 			}
 		}
+	}
+}
+int open_file(int srcpid, void* client_buf) {
+	char* filepath = malloc(MAXPATHNAMELEN);
+	int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+
+	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
+	if (dir_inode == NULL) {
+		return ERROR;
+	}
+	struct decorated_inode* file_inode = get_file_inode(dir_inode, get_filename(filepath));
+	if (file_inode->inode->type != INODE_REGULAR && file_inode->inode->type != INODE_DIRECTORY) {
+		printf("Error: Inode not file or directory\n");
+		return ERROR;
+	}
+	if (file_inode != NULL) {
+		return file_inode->inum;
 	}
 	printf(" Open found error \n");
 	return ERROR;
@@ -667,6 +673,38 @@ void remove_data_block_from_free_list(struct inode* inode) {
 	free_data_block_num(inode->indirect);
 }
 
+int stat(int srcpid, void* client_buf) {
+	char* filepath = malloc(MAXPATHNAMELEN);
+	
+	int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+
+	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
+	struct decorated_inode* file_inode = get_file_inode(dir_inode, get_filename(filepath));
+
+	if (file_inode == NULL) {
+		return ERROR;
+	}
+
+	struct Stat file_stat;
+	file_stat.inum = file_inode->inum;
+	file_stat.type = file_inode->inode->type;
+	file_stat.size = file_inode->inode->size;
+	file_stat.nlink = file_inode->inode->nlink;
+
+	result = CopyTo(srcpid, client_buf, &file_stat, sizeof(struct Stat));
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+	return 0;
+}
+
 int main(int argc, char* argv[]) {
 	msg_buf = malloc(sizeof(struct my_msg));
 	struct fs_header* header = malloc(SECTORSIZE);
@@ -795,6 +833,12 @@ int main(int argc, char* argv[]) {
 		}
 		if (msg_buf->type == RMDIR){
 			msg_buf->data0 = remove_directory(pid, msg_buf->ptr);
+			if (Reply(msg_buf, pid) != 0){
+				printf("error removing directory\n");
+			}
+		}
+		if (msg_buf->type == STAT) {
+			msg_buf->data0 = stat(pid, msg_buf->ptr);
 			if (Reply(msg_buf, pid) != 0){
 				printf("error removing directory\n");
 			}

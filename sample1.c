@@ -9,6 +9,12 @@
 #include "msginfo.h"
 
 
+void printStat(struct Stat* stat) {
+	printf("Stat inum %d\n", stat->inum);
+	printf("Stat type %d\n", stat->type);
+	printf("Stat size %d\n", stat->size);
+	printf("Stat nlink %d\n", stat->nlink);
+}
 int
 main()
 {
@@ -16,7 +22,7 @@ main()
 	char* result = malloc(16);
 	printf("Sample 1 -- creating file \n");
 	// printf("making dir newdir\n");
-	fd = MkDir("/neabcdefghijklmnopqt");
+	fd = MkDir("/hello");
 	// fd = ChDir("///./neabcdefghijklmnopqt");
 
 	// int i;
@@ -33,14 +39,16 @@ main()
 	
 	// // printf("result %d\n", fd);
 	
-	// fd = Create("c.txt");
-	// Close(fd);
-	// fd = Open("/newdir/c.txt");
-	// Write(fd, "abcdfg\0", 16);
-	// Seek(fd, 0, SEEK_SET);
-	// Read(fd, result, 16);
-	// printf("This worked eh? %s\n", result);
-	// Close(fd);
+	fd = Create("c.txt");
+	Close(fd);
+	fd = Open("c.txt");
+	Write(fd, "aaa\0", 4);
+	struct Stat* statbuf = malloc(sizeof(struct Stat));
+	int a = Stat("/hello", statbuf);
+	printf("Stat: %d\n", a);
+	printStat(statbuf);
+	printf("This worked eh? %s\n", result);
+	Close(fd);
 
 	// fd = Create("c");
 	// Write(fd, "cccccccccccccccc", 16);

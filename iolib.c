@@ -268,7 +268,7 @@ int RmDir(char* pathname){
 	if (is_relative(pathname) == 1){
 		pathname = add_cur_dir_to(pathname);
 	}
-	printf("pathname asdfafsdlj;k %s\n", pathname);
+
 	int i;
 	for (i = 0; i < DATA2LENGTH; i++) {
 		rmdir_msg.data2[i] = pathname[i];
@@ -277,5 +277,23 @@ int RmDir(char* pathname){
 		printf("Error removing direc file\n");
 		return ERROR;
 	}
-	return 0; 
+	return rmdir_msg.data0; 
+}
+
+int Stat(char* pathname, struct Stat *statbuf) {
+	init();
+	struct my_msg stat_msg;
+	stat_msg.type = STAT;
+	if (is_relative(pathname) == 1){
+		pathname = add_cur_dir_to(pathname);
+	}
+	void* buf = malloc((MAXPATHNAMELEN > sizeof(struct Stat)) ? MAXPATHNAMELEN : sizeof(struct Stat));
+	memcpy(buf, pathname, MAXPATHNAMELEN);
+	stat_msg.ptr = buf;
+	if (Send(&stat_msg, -FILE_SERVER) != 0) {
+		printf("Error removing direc file\n");
+		return ERROR;
+	}
+	memcpy(statbuf, buf, sizeof(struct Stat));
+	return stat_msg.data0; 
 }
