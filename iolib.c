@@ -245,6 +245,7 @@ int ChDir(char* pathname){
 	for (i = 0; i < DATA2LENGTH; i++) {
 		chdir_msg.data2[i] = pathname[i];
 	}
+	chdir_msg.ptr = pathname;
 	if (Send(&chdir_msg, -FILE_SERVER) != 0) {
 		printf("Error changing direc file\n");
 		return ERROR;

@@ -15,15 +15,15 @@ main()
 	int fd;
 	char* result = malloc(16);
 	printf("Sample 1 -- creating file \n");
-	printf("making dir newdir\n");
-	fd = MkDir("/newdir");
-	fd = RmDir("/newdir");
+	// printf("making dir newdir\n");
+	fd = MkDir("/neabcdefghijklmnopqt");
+	// fd = ChDir("///./neabcdefghijklmnopqt");
 
 	// int i;
 	// for (i = 0; i < 100; i++) {
 	// 	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");	printf("---------------------\n");
 	// }
-	fd = MkDir("/newdir/one");
+	// fd = MkDir("/newdir/one");
 	// fd = ChDir("/newdir");
 	// fd = ChDir("one");
 	// fd = ChDir("..");

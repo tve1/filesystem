@@ -513,18 +513,16 @@ int add_parent_and_self(struct decorated_inode* cur_inode, struct decorated_inod
 
 }
 
-int make_directory(char* filepath) {
-	// char* filepath = malloc(MAXPATHNAMELEN);
+int make_directory(int srcpid, void* client_buf) {
+	char* filepath = malloc(MAXPATHNAMELEN);
 	
-	// printf(" ---------%d %p %p %d\n", srcpid, filepath, client_buf, MAXPATHNAMELEN);
+	int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
 	
-	// int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
-	
-	// if (result != 0) {
-	// 	printf("Error copying data\n");
-	// 	return ERROR;
-	// }
-	printf("Making directory %s\n", filepath);
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+	printf("Making directory ===> %s\n", filepath);
 	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
 	if (dir_inode == NULL) {
 		return ERROR;
@@ -574,7 +572,16 @@ int make_directory(char* filepath) {
 	return 0;
 }
 
-int change_directory(char* filepath){
+int change_directory(int srcpid, void* client_buf){
+	char* filepath = malloc(MAXPATHNAMELEN);
+	
+	int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+	printf("Changing directory ===> %s\n", filepath);
 	struct decorated_inode* dir_inode = get_directory_inode(filepath);
 	if (dir_inode == NULL || dir_inode->inode->type != INODE_DIRECTORY){
 		printf("%s is not a directory\n", filepath);
@@ -583,7 +590,15 @@ int change_directory(char* filepath){
 	return 0;
 }
 
-int remove_directory(char* filepath){
+int remove_directory(int srcpid, void* client_buf){
+	char* filepath = malloc(MAXPATHNAMELEN);
+	
+	int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
 	struct decorated_inode* dir_inode = get_directory_inode(filepath);
 	printf("removing %s\n", filepath);
 	if (dir_inode == NULL || dir_inode->inode->type != INODE_DIRECTORY){
@@ -767,19 +782,19 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		if (msg_buf->type == MKDIR){
-			msg_buf->data0 = make_directory(msg_buf->data2);
+			msg_buf->data0 = make_directory(pid, msg_buf->ptr);
 			if (Reply(msg_buf, pid) != 0){
 				printf("error making directory\n");
 			}
 		}
 		if (msg_buf->type == CHDIR){
-			msg_buf->data0 = change_directory(msg_buf->data2);
+			msg_buf->data0 = change_directory(pid, msg_buf->ptr);
 			if (Reply(msg_buf, pid) != 0){
 				printf("error changing directory\n");
 			}
 		}
 		if (msg_buf->type == RMDIR){
-			msg_buf->data0 = remove_directory(msg_buf->data2);
+			msg_buf->data0 = remove_directory(pid, msg_buf->ptr);
 			if (Reply(msg_buf, pid) != 0){
 				printf("error removing directory\n");
 			}
