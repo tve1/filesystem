@@ -5,6 +5,7 @@
 #define SEEK 4
 #define MKDIR 5	
 #define CHDIR 6	
+#define RMDIR 7	
 #define DATA2LENGTH 16
 struct my_msg {
 	short type;

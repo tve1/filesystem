@@ -259,3 +259,22 @@ int ChDir(char* pathname){
 	return ERROR;
 
 }
+
+int RmDir(char* pathname){
+	init();
+	struct my_msg rmdir_msg;
+	rmdir_msg.type = RMDIR;
+	if (is_relative(pathname) == 1){
+		pathname = add_cur_dir_to(pathname);
+	}
+	printf("pathname asdfafsdlj;k %s\n", pathname);
+	int i;
+	for (i = 0; i < DATA2LENGTH; i++) {
+		rmdir_msg.data2[i] = pathname[i];
+	}
+	if (Send(&rmdir_msg, -FILE_SERVER) != 0) {
+		printf("Error removing direc file\n");
+		return ERROR;
+	}
+	return 0; 
+}

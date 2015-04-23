@@ -132,7 +132,7 @@ struct decorated_inode* get_directory_inode(char* pathname) {
 								}
 							}
 							if (is_valid) {
-			
+								printf("jsd;flkajsd %s, %d\n", cur_dir->name, cur_dir->inum);
 								root_dir = get_inode(cur_dir->inum);	
 								// printf("root dir name %s\n", cur_dir->name);		
 								dir_exists = 1;
@@ -147,6 +147,7 @@ struct decorated_inode* get_directory_inode(char* pathname) {
 			}
 		}
 	}
+	printf("root_dir: %d\n", root_dir->inum);
 	return root_dir;
 }
 
@@ -165,7 +166,9 @@ char* get_pathname(char* filepath) {
 		}
 	}
 
-	char* pathname = malloc(end_of_path_index + 1);
+	char* pathname = malloc(DIRNAMELEN);
+	memset(pathname, 0, DIRNAMELEN);
+	printf("=== %s %d\n", filepath, end_of_path_index + 1);
 	memcpy(pathname, filepath, end_of_path_index + 1);
 	return pathname;
 }
@@ -209,6 +212,7 @@ int add_dir_entry(struct decorated_inode* decorated_inode, struct dir_entry* new
 				if (cur->inum == 0) {
 					memcpy((struct dir_entry *) ((unsigned long)block_data + j * sizeof(struct dir_entry)), new_dir_entry, sizeof(struct  dir_entry));
 					printf("writing dir entry with inum %d\n", new_dir_entry->inum);
+					decorated_inode->inode->size += sizeof(struct dir_entry);
 					WriteSector(inode->direct[i], block_data);
 					return 0;
 				}
@@ -231,6 +235,7 @@ int add_dir_entry(struct decorated_inode* decorated_inode, struct dir_entry* new
 			void* temp_sector = malloc(BLOCKSIZE);
 			ReadSector(decorated_inode->inum / (BLOCKSIZE/INODESIZE) + 1, temp_sector);
 			memcpy(temp_sector + decorated_inode->inum % (BLOCKSIZE/INODESIZE) * sizeof(struct inode), inode, sizeof(struct inode)); 
+			decorated_inode->inode->size += sizeof(struct dir_entry);
 			WriteSector(decorated_inode->inum / (BLOCKSIZE/INODESIZE) + 1, temp_sector);
 			free(temp_sector);
 			return 0;
@@ -497,6 +502,7 @@ int add_parent_and_self(struct decorated_inode* cur_inode, struct decorated_inod
 	memcpy(block_data + sizeof(struct dir_entry), &self_dir, sizeof(struct dir_entry));
 
 	WriteSector(cur_inode->inode->direct[0], block_data);
+	cur_inode->inode->size = 2 * sizeof(struct dir_entry);
 	return 0;
 
 }
@@ -566,6 +572,48 @@ int change_directory(char* filepath){
 		return ERROR;
 	}
 	return 0;
+}
+
+int remove_directory(char* filepath){
+	struct decorated_inode* dir_inode = get_directory_inode(filepath);
+	printf("removing %s\n", filepath);
+	if (dir_inode == NULL || dir_inode->inode->type != INODE_DIRECTORY){
+		printf("%s is not a directory and can't be removed\n", filepath);
+		return ERROR;
+	}
+	if (dir_inode->inum == ROOTINODE){
+		printf("can't remove root directory\n");
+		return ERROR;
+	}
+	if (dir_inode->inode->size != 2 * sizeof(struct dir_entry)){
+		printf("rmdir: failed to remove /'%s/': Directory not empty\n", filepath);
+		printf("size: %d\n", dir_inode->inode->size);
+		return ERROR;
+	}
+	printf("parent_inode: %s\n", get_pathname(filepath));
+	struct decorated_inode* parent_inode = get_directory_inode(get_pathname(filepath));
+	printf("parent inode: %d\n", parent_inode->inum);
+	void* block_data = malloc(BLOCKSIZE);
+	memset(block_data, 0, BLOCKSIZE);
+	int i;
+	for (i = 0; i < NUM_DIRECT; i++) {
+		if (parent_inode->inode->direct[i] != 0) {
+			ReadSector(parent_inode->inode->direct[i], block_data);
+			
+			int j;
+			for (j = 0; j < BLOCKSIZE / sizeof(struct dir_entry); j++) {
+				struct dir_entry* cur_dir = (struct dir_entry*)(block_data + sizeof(struct dir_entry) * j);
+				if (cur_dir->inum == dir_inode->inum) {
+					cur_dir->inum = 0;
+					WriteSector(parent_inode->inode->direct[i],	block_data);
+					printf("It works!!!!\n");
+					return 0;
+				}
+			}
+		}
+	}
+	printf("We here!!!!\n");
+	return ERROR;
 }
 
 void free_data_block_num(int cur_block_num) {
@@ -711,13 +759,19 @@ int main(int argc, char* argv[]) {
 		if (msg_buf->type == MKDIR){
 			msg_buf->data0 = make_directory(msg_buf->data2);
 			if (Reply(msg_buf, pid) != 0){
-				printf("error seeking\n");
+				printf("error making directory\n");
 			}
 		}
 		if (msg_buf->type == CHDIR){
 			msg_buf->data0 = change_directory(msg_buf->data2);
 			if (Reply(msg_buf, pid) != 0){
-				printf("error seeking\n");
+				printf("error changing directory\n");
+			}
+		}
+		if (msg_buf->type == RMDIR){
+			msg_buf->data0 = remove_directory(msg_buf->data2);
+			if (Reply(msg_buf, pid) != 0){
+				printf("error removing directory\n");
 			}
 		}
 	}
