@@ -15,12 +15,15 @@ main()
 	int fd;
 	char* result = malloc(16);
 	printf("Sample 1 -- creating file \n");
+	printf("making dir newdir\n");
 	fd = MkDir("/newdir");
+	printf("making dir newdir/foo\n");
+	fd = MkDir("/newdir/foo");
 	
 	printf("result %d\n", fd);
 	
-	fd = Create("/newdir/c.txt");
-	Write(fd, "bbbbbbbbbbbbbbb\0", 16);
+	fd = Create("/newdiraaa/c.txt");
+	Write(fd, "abcdfg\0", 16);
 	Seek(fd, 0, SEEK_SET);
 	Read(fd, result, 16);
 	printf("This worked eh? %s\n", result);

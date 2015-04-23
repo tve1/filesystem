@@ -66,7 +66,7 @@ int get_next_dir_name(char* pathname, int start, char* dir_name_result, int* fla
 	int q;
 	for (q = 0; q < DIRNAMELEN; q++) {
 		if (pathname[start + q] == '/' || pathname[start + q] == '\0') {
-			if (pathname[start + 1] == '\0') {
+			if (pathname[start + q] == '\0') {
 				flag[0] = 1;
 			}
 			if (is_done == 0) {
@@ -85,28 +85,34 @@ int get_next_dir_name(char* pathname, int start, char* dir_name_result, int* fla
 }
 struct decorated_inode* get_directory_inode(char* pathname) {
 	void* block_data = malloc(BLOCKSIZE);
+	struct decorated_inode* root_dir = NULL;
 	
 	if (pathname[0] == '/') {
 		int spot_in_path = 1;
 		struct decorated_inode* cur = all_inodes;
 		while (cur != NULL){
 			if (cur->inum == ROOTINODE){
-				return cur;
+				if (pathname[1] == 0) {
+					return cur;
+				}
+				break;
 			}
 			cur = cur->next;
 		}
 
-		struct decorated_inode* root_dir = cur;
+		root_dir = cur;
 		char* cur_dir_name = malloc(DIRNAMELEN);
 		int* flag = malloc(sizeof(int));
+		flag[0] = 0;
 		while (flag[0] == 0) {
 			int dir_exists = 0;
 
 			spot_in_path = get_next_dir_name(pathname, spot_in_path, cur_dir_name, flag);
-
+			
 			int i;
 			for (i = 0; i < NUM_DIRECT; i++) {
 				if (root_dir->inode->direct[i] != 0) {
+					// printf("reading sector %d\n", i);
 					ReadSector(root_dir->inode->direct[i], block_data);
 					
 					int j;
@@ -117,13 +123,16 @@ struct decorated_inode* get_directory_inode(char* pathname) {
 			
 							int k;
 							for (k = 0; k < DIRNAMELEN; k++) {
+								// printf("comparing %c to %c\n", cur_dir->name[k], cur_dir_name[k]);
 								if (cur_dir->name[k] != cur_dir_name[k]) {
 									is_valid = 0;
+									break;
 								}
 							}
 							if (is_valid) {
 			
-								root_dir = get_inode(cur_dir->inum);			
+								root_dir = get_inode(cur_dir->inum);	
+								// printf("root dir name %s\n", cur_dir->name);		
 								dir_exists = 1;
 							}				
 						}
@@ -136,8 +145,7 @@ struct decorated_inode* get_directory_inode(char* pathname) {
 			}
 		}
 	}
-	printf("cannot find file\n");
-	return NULL;
+	return root_dir;
 }
 
 // struct dir_entry* get_root_dir(){
@@ -173,9 +181,14 @@ char* get_filename(char* filepath) {
 			break;
 		}
 	}
-	int filename_size = end_of_file_index - end_of_path_index + 1;
-	char* filename = malloc(filename_size);
+	int filename_size = end_of_file_index - end_of_path_index;
+	char* filename = malloc(DIRNAMELEN);
 	memcpy(filename, filepath + end_of_path_index + 1, filename_size);
+	int p;
+	for (p = 0; p < DIRNAMELEN - filename_size; p++) {
+		filename[filename_size + p] = '\0';
+	}	
+	printf("filename %s %d\n", filename, filename_size);
 	return filename;
 }
 
@@ -348,6 +361,7 @@ int add_data(struct decorated_inode* decorated_inode, void* data_buf, int size, 
 }
 
 int create_file(char* filepath) {
+
 	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
 	struct dir_entry* new_file = malloc(sizeof(struct dir_entry));
 	struct decorated_inode* new_inode = alloc_free_inode();
@@ -377,7 +391,6 @@ int open_file(char* filepath) {
 				struct dir_entry* cur_dir = (struct dir_entry*)(block_data + sizeof(struct dir_entry) * j);
 				if (cur_dir->inum != 0) {
 					int is_valid = 1;
-					printf("c %d\n", cur_dir->inum);
 
 					int k;
 					for (k = 0; k < DIRNAMELEN; k++) {
@@ -470,7 +483,6 @@ int make_directory(char* filepath) {
 	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
 	int i;
 	char* dir_name = get_filename(filepath);
-
 	void* block_data = malloc(BLOCKSIZE);
 	memset(block_data, 0, BLOCKSIZE);
 	for (i = 0; i < NUM_DIRECT; i++) {
@@ -505,6 +517,7 @@ int make_directory(char* filepath) {
 	new_inode->inode->reuse++;
 	new_inode->inode->size = 0;
 	new_directory->inum = new_inode->inum;
+
 	memcpy(new_directory->name, dir_name, DIRNAMELEN);
 	add_dir_entry(dir_inode, new_directory);
 	add_parent_and_self(new_inode, dir_inode);
@@ -550,7 +563,6 @@ int main(int argc, char* argv[]) {
  	free_data_block_list = NULL;
 	
 	cur_directory_inode = ROOTINODE;
-	printf("z\n");
  	int a;
  	for (a = num_inode_blocks + 1; a < header->num_blocks; a++) {
 
@@ -582,11 +594,8 @@ int main(int argc, char* argv[]) {
  				// free_inode_list = new_free_inode;
  			}
  			else {				
- 			printf("a %p\n", all_inodes->next);
  				remove_data_block_from_free_list(new_inode);
- 			printf("b %p\n", all_inodes->next);
  			}
- 			printf("inum %p\n", all_inodes->next);
 
  		}
 	}
