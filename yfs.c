@@ -24,6 +24,7 @@ struct decorated_inode* decorated_inode_list;
 struct free_data_block* free_data_block_list;
 struct decorated_inode* all_inodes;
 int cur_directory_inode;
+int num_inode_blocks;
 
 struct my_msg* msg_buf;
 
@@ -213,6 +214,7 @@ int add_dir_entry(struct decorated_inode* decorated_inode, struct dir_entry* new
 					memcpy((struct dir_entry *) ((unsigned long)block_data + j * sizeof(struct dir_entry)), new_dir_entry, sizeof(struct  dir_entry));
 					printf("writing dir entry with inum %d\n", new_dir_entry->inum);
 					decorated_inode->inode->size += sizeof(struct dir_entry);
+					printf("Ding writesector %d\n", inode->direct[i]);
 					WriteSector(inode->direct[i], block_data);
 					return 0;
 				}
@@ -229,6 +231,7 @@ int add_dir_entry(struct decorated_inode* decorated_inode, struct dir_entry* new
 			printf("adding direct block %d\n", blk->block_num);
 			inode->direct[p] = blk->block_num;
 			memcpy(block_data, new_dir_entry, sizeof(struct  dir_entry));
+			
 			WriteSector(inode->direct[p], block_data);			
 			
 			//TODO Cache this
@@ -236,6 +239,7 @@ int add_dir_entry(struct decorated_inode* decorated_inode, struct dir_entry* new
 			ReadSector(decorated_inode->inum / (BLOCKSIZE/INODESIZE) + 1, temp_sector);
 			memcpy(temp_sector + decorated_inode->inum % (BLOCKSIZE/INODESIZE) * sizeof(struct inode), inode, sizeof(struct inode)); 
 			decorated_inode->inode->size += sizeof(struct dir_entry);
+			
 			WriteSector(decorated_inode->inum / (BLOCKSIZE/INODESIZE) + 1, temp_sector);
 			free(temp_sector);
 			return 0;
@@ -399,11 +403,13 @@ int create_file(int srcpid, void* client_buf) {
 
 struct decorated_inode* get_file_inode(struct decorated_inode* dir_inode, char* filename) {
 	int i;
+	printf("looking for %s in dir %d\n", filename, dir_inode->inum);
 
 	void* block_data = malloc(BLOCKSIZE);
 	memset(block_data, 0, BLOCKSIZE);
 	for (i = 0; i < NUM_DIRECT; i++) {
 		if (dir_inode->inode->direct[i] != 0) {
+			printf("we made it here-----------\n");
 			ReadSector(dir_inode->inode->direct[i], block_data);
 			
 			int j;
@@ -414,19 +420,22 @@ struct decorated_inode* get_file_inode(struct decorated_inode* dir_inode, char* 
 
 					int k;
 					for (k = 0; k < DIRNAMELEN; k++) {
+						printf("%c to %c\n", cur_dir->name[k], filename[k]);
 						if (cur_dir->name[k] != filename[k]) {
 							is_valid = 0;
 						}
 					}
 					if (is_valid) {
 						struct decorated_inode *file_node = get_inode(cur_dir->inum);
-						  
-						return file_node;
+						printf("Returning file node %d\n", file_node->inum);
+						return file_node;	
 					}				
 				}
 			}
 		}
 	}
+	printf("couldn't find file %s\n", filename);
+	return NULL;
 }
 int open_file(int srcpid, void* client_buf) {
 	char* filepath = malloc(MAXPATHNAMELEN);
@@ -436,19 +445,24 @@ int open_file(int srcpid, void* client_buf) {
 		printf("Error copying data\n");
 		return ERROR;
 	}
-
+	printf("a\n");
 	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
+	printf("b\n");
 	if (dir_inode == NULL) {
 		return ERROR;
 	}
+	printf("c\n");
 	struct decorated_inode* file_inode = get_file_inode(dir_inode, get_filename(filepath));
+	printf("d\n");
 	if (file_inode->inode->type != INODE_REGULAR && file_inode->inode->type != INODE_DIRECTORY) {
 		printf("Error: Inode not file or directory\n");
 		return ERROR;
 	}
+	printf("e\n");
 	if (file_inode != NULL) {
 		return file_inode->inum;
 	}
+	printf("f\n");
 	printf(" Open found error \n");
 	return ERROR;
 }
@@ -706,24 +720,29 @@ int stat(int srcpid, void* client_buf) {
 }
 
 int sync_all() {
-	int index = 0;
-	int cur_sector = 0;
 	struct decorated_inode* cur = all_inodes;
 	
-	void* block_data = malloc(BLOCKSIZE);
+	void** block_data_arr = malloc(num_inode_blocks);
+	int j;
+	for (j=0; j < num_inode_blocks; j++) {
+		void* block_data = malloc(BLOCKSIZE);
+		ReadSector(j+1, block_data);
+		struct fs_header* header = (struct fs_header*) block_data;
+		int total_nodes = header->num_inodes + 1;
+		block_data_arr[j] = block_data;
+	}
 	while(cur != NULL) {
-		memcpy(block_data + index * INODESIZE, cur->inode, INODESIZE);
-		index++;
-		if (index == BLOCKSIZE / INODESIZE) {
-			//write inodes to file;
-			index = 0;
-			printf("Writing sector %d\n", cur_sector);
-			WriteSector(cur_sector, block_data);
-			cur_sector++;	
-		}
+		int row = cur->inum / (BLOCKSIZE / INODESIZE);
+		int col = cur->inum % (BLOCKSIZE / INODESIZE);
+		memcpy(block_data_arr[row] + col * INODESIZE, cur->inode, INODESIZE);
 		cur = cur->next;
 	}
-	free(block_data);
+	int k;
+	for (k = 1; k <= num_inode_blocks; k++) {
+		WriteSector(k, block_data_arr[k - 1]);
+		free(block_data_arr[k]);
+	}
+	free(block_data_arr);
 	return 0;
 }
 
@@ -733,7 +752,7 @@ int main(int argc, char* argv[]) {
 	ReadSector(1, header);
  	int total_nodes = header->num_inodes + 1;
  	int node_size = total_nodes * INODESIZE;
- 	int num_inode_blocks = (node_size + BLOCKSIZE - 1)/ BLOCKSIZE;
+ 	num_inode_blocks = (node_size + BLOCKSIZE - 1)/ BLOCKSIZE;
  	all_inodes = NULL;
  	decorated_inode_list = NULL;
  	free_data_block_list = NULL;

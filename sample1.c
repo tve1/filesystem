@@ -39,17 +39,17 @@ main()
 	
 	// // printf("result %d\n", fd);
 	
-	// fd = Create("c.txt");
+	// fd = Create("/c.txt");
 	// Write(fd, "aaa\0", 4);
 	// Close(fd);
 
 	// Sync();
 
-	fd = Open("c.txt");
+	fd = Open("/c.txt");
 	Read(fd, result, 3);
 	Close(fd);
 	printf("Result is %s\n", result);
-	
+
 	// fd = Create("c");
 	// Write(fd, "cccccccccccccccc", 16);
 	// Close(fd);
