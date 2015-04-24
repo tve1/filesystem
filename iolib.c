@@ -324,7 +324,7 @@ int Shutdown() {
 
 int Link(char* oldname, char* newname) {
 	init();
-	printf("size %d %d\n", sizeof(struct my_msg), sizeof(struct link_msg));
+	
 	if (is_relative(oldname) == 1){
 		oldname = add_cur_dir_to(oldname);
 	}
@@ -357,5 +357,47 @@ int Unlink(char* pathname) {
 		return ERROR;
 	}
 	return unlink_msg.data0;
+
+}
+
+int SymLink(char* oldname, char* newname) {
+	init();
+	if (is_relative(oldname) == 1){
+		oldname = add_cur_dir_to(oldname);
+	}
+	if (is_relative(newname) == 1){
+		newname = add_cur_dir_to(newname);
+	}
+
+	struct link_msg link_msg;
+	link_msg.type = SYMLINK;
+	link_msg.ptr = oldname;
+	link_msg.ptr2 = newname;
+	if (Send(&link_msg, -FILE_SERVER) != 0) {
+		printf("Error link\n");
+		return ERROR;
+	}
+	return link_msg.data0;
+
+}
+
+
+int ReadLink(char* pathname, char* buf, int len) {
+	init();
+	
+	if (is_relative(pathname) == 1){
+		pathname = add_cur_dir_to(pathname);
+	}
+
+	struct link_msg readlink_msg;
+	readlink_msg.type = READLINK;
+	readlink_msg.data0 = len;
+	readlink_msg.ptr = pathname;
+	readlink_msg.ptr2 = buf;
+	if (Send(&readlink_msg, -FILE_SERVER) != 0) {
+		printf("Error link\n");
+		return ERROR;
+	}
+	return readlink_msg.data0;
 
 }

@@ -23,6 +23,9 @@ main()
 	printf("Sample 1 -- creating file\n");
 	// printf("making dir newdir\n");
 	// fd = MkDir("/hello");
+	// SymLink("hello", "lemon");
+	// ReadLink("lemon", result, 10);
+	// printf("result %s\n", result);
 	// fd = ChDir("///./neabcdefghijklmnopqt");
 
 	// int i;
@@ -39,14 +42,17 @@ main()
 	
 	// // printf("result %d\n", fd);
 	
-	fd = Create("/c.txt");
+	fd = Create("b.txt");
 	Write(fd, "abc\0", 4);
 	Close(fd);
 
-	// Sync();
+	// // Sync();
 
-	Link("c.txt", "b.txt");
-	fd = Open("b.txt");
+	// Link("c.txt", "b.txt");
+	// Unlink("b.txt");
+	fd = Create("b.txt");
+	Write(fd, "z\0", 2);
+	Seek(fd, 0, SEEK_SET);
 	Read(fd, result, 3);
 	Close(fd);
 	printf("Result is %s\n", result);

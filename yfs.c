@@ -173,6 +173,38 @@ char* get_pathname(char* filepath) {
 	memcpy(pathname, filepath, end_of_path_index + 1);
 	return pathname;
 }
+struct decorated_inode* get_file_inode(struct decorated_inode* dir_inode, char* filename) {
+	int i;
+
+	void* block_data = malloc(BLOCKSIZE);
+	memset(block_data, 0, BLOCKSIZE);
+	for (i = 0; i < NUM_DIRECT; i++) {
+		if (dir_inode->inode->direct[i] != 0) {
+			ReadSector(dir_inode->inode->direct[i], block_data);
+			
+			int j;
+			for (j = 0; j < BLOCKSIZE / sizeof(struct dir_entry); j++) {
+				struct dir_entry* cur_dir = (struct dir_entry*)(block_data + sizeof(struct dir_entry) * j);
+				if (cur_dir->inum != 0) {
+					int is_valid = 1;
+
+					int k;
+					for (k = 0; k < DIRNAMELEN; k++) {
+						if (cur_dir->name[k] != filename[k]) {
+							is_valid = 0;
+						}
+					}
+					if (is_valid) {
+						struct decorated_inode *file_node = get_inode(cur_dir->inum);
+						return file_node;	
+					}				
+				}
+			}
+		}
+	}
+	printf("couldn't find file %s\n", filename);
+	return NULL;
+}
 char* get_filename(char* filepath) {
 	int end_of_path_index = -1;
 	int end_of_file_index = 0;
@@ -389,6 +421,27 @@ int create_file(int srcpid, void* client_buf) {
 	if (dir_inode == NULL) {
 		return ERROR;
 	}
+
+	struct decorated_inode* file_inode = get_file_inode(dir_inode, get_filename(filepath));
+	
+	if (file_inode != NULL) {
+
+		int i;
+		void* block_data = malloc(BLOCKSIZE);
+		for (i=0; i < NUM_DIRECT; i++) {
+			if (file_inode->inode->direct[i] != 0) {
+				memset(block_data, 0, BLOCKSIZE);
+				WriteSector(file_inode->inode->direct[i], block_data);
+				file_inode->inode->direct[i] = 0;
+				struct free_data_block* new_blk = malloc(sizeof(struct free_data_block));
+				new_blk->block_num = file_inode->inode->direct[i];
+				new_blk->next = free_data_block_list;
+				free_data_block_list = new_blk;
+			}
+		}
+		file_inode->inode->type = INODE_FREE;
+	}
+
 	struct decorated_inode* new_inode = alloc_free_inode();
 	new_inode->inode->type = INODE_REGULAR;
 	new_inode->inode->nlink = 1;
@@ -425,7 +478,6 @@ void remove_dir_entry(struct decorated_inode* dir_inode, char* filename) {
 					if (is_valid) {
 						cur_dir->inum = 0;
 						WriteSector(dir_inode->inode->direct[i], block_data);
-						return cur_dir;	
 					}				
 				}
 			}
@@ -433,38 +485,7 @@ void remove_dir_entry(struct decorated_inode* dir_inode, char* filename) {
 	}
 }
 
-struct decorated_inode* get_file_inode(struct decorated_inode* dir_inode, char* filename) {
-	int i;
 
-	void* block_data = malloc(BLOCKSIZE);
-	memset(block_data, 0, BLOCKSIZE);
-	for (i = 0; i < NUM_DIRECT; i++) {
-		if (dir_inode->inode->direct[i] != 0) {
-			ReadSector(dir_inode->inode->direct[i], block_data);
-			
-			int j;
-			for (j = 0; j < BLOCKSIZE / sizeof(struct dir_entry); j++) {
-				struct dir_entry* cur_dir = (struct dir_entry*)(block_data + sizeof(struct dir_entry) * j);
-				if (cur_dir->inum != 0) {
-					int is_valid = 1;
-
-					int k;
-					for (k = 0; k < DIRNAMELEN; k++) {
-						if (cur_dir->name[k] != filename[k]) {
-							is_valid = 0;
-						}
-					}
-					if (is_valid) {
-						struct decorated_inode *file_node = get_inode(cur_dir->inum);
-						return file_node;	
-					}				
-				}
-			}
-		}
-	}
-	printf("couldn't find file %s\n", filename);
-	return NULL;
-}
 int open_file(int srcpid, void* client_buf) {
 	char* filepath = malloc(MAXPATHNAMELEN);
 	int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
@@ -755,8 +776,6 @@ int sync_all() {
 	for (j=0; j < num_inode_blocks; j++) {
 		void* block_data = malloc(BLOCKSIZE);
 		ReadSector(j+1, block_data);
-		struct fs_header* header = (struct fs_header*) block_data;
-		int total_nodes = header->num_inodes + 1;
 		block_data_arr[j] = block_data;
 	}
 	while(cur != NULL) {
@@ -855,6 +874,108 @@ int unlink_yfs(int srcpid, void* client_buf) {
 
 	return 0;
 
+}
+
+int symlink_yfs(int srcpid, void* oldname_client, void* newname_client) {
+	char* filepath_old = malloc(MAXPATHNAMELEN);
+	memset(filepath_old, 0, MAXPATHNAMELEN);
+
+	int result = CopyFrom(srcpid, filepath_old, oldname_client, MAXPATHNAMELEN);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+
+	char* filepath_new = malloc(MAXPATHNAMELEN);
+	memset(filepath_new, 0, MAXPATHNAMELEN);
+	
+	result = CopyFrom(srcpid, filepath_new, newname_client, MAXPATHNAMELEN);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+
+	struct decorated_inode* old_file = get_file_inode(get_directory_inode(get_pathname(filepath_old)), get_filename(filepath_old));
+	struct decorated_inode* new_dir_inode = get_directory_inode(get_pathname(filepath_new));
+
+	if (old_file == NULL) {
+		printf("Old file does not exist\n");
+		return ERROR;
+	}
+
+	struct decorated_inode* sym_link_inode = alloc_free_inode();
+	sym_link_inode->inode->type = INODE_SYMLINK;
+	sym_link_inode->inode->nlink = 1;
+	sym_link_inode->inode->reuse++;
+	sym_link_inode->inode->size = strlen(filepath_old);
+
+	struct free_data_block* blk =  alloc_free_block();
+	sym_link_inode->inode->direct[0] = blk->block_num;
+	WriteSector(sym_link_inode->inode->direct[0], filepath_old);
+
+	struct dir_entry* new_link = malloc(sizeof(struct dir_entry));
+	new_link->inum = sym_link_inode->inum;
+
+	memcpy(new_link->name, get_filename(filepath_new), DIRNAMELEN);
+	old_file->inode->nlink++;
+
+	add_dir_entry(new_dir_inode, new_link);
+	
+	return 0;
+}
+
+int read_sym_link(void* result_buf, char* filepath, int len) {
+
+	struct decorated_inode* file = get_file_inode(get_directory_inode(get_pathname(filepath)), get_filename(filepath));
+
+	if (file == NULL) {
+		printf("file does not exist\n");
+		return ERROR;
+	}
+
+	if (file->inode->type != INODE_SYMLINK) {
+		printf("File is not symlink\n");
+		return ERROR;
+	}
+
+	void* block_data = malloc(BLOCKSIZE);
+	ReadSector(file->inode->direct[0], block_data);
+
+	if (file->inode->size > len) {
+		len = file->inode->size;
+	}
+
+	memcpy(result_buf, block_data, len);
+
+	return 0;
+}
+
+int readlink_yfs(int srcpid, void* client_buf, void* buf_client, int len) {
+	char* filepath = malloc(MAXPATHNAMELEN);
+	
+	int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+
+
+
+	char* read_data = malloc(MAXPATHNAMELEN);
+
+	int sm_result = read_sym_link(read_data, filepath, len);
+	
+	result = CopyTo(srcpid, buf_client, read_data, MAXPATHNAMELEN);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+
+	return sm_result;
 }
 void shutdown() {
 	printf("Shutting down\n");
@@ -1015,7 +1136,7 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		if (msg_buf->type == LINK) {
-			struct link_msg* link_buf = (struct link_buf*) msg_buf;
+			struct link_msg* link_buf = (void*)msg_buf;
 			msg_buf->data0 = link_yfs(pid, link_buf->ptr, link_buf->ptr2);
 			if (Reply(msg_buf, pid) != 0){
 				printf("error shutdown\n");
@@ -1023,6 +1144,20 @@ int main(int argc, char* argv[]) {
 		}
 		if (msg_buf->type == UNLINK) {
 			msg_buf->data0 = unlink_yfs(pid, msg_buf->ptr);
+			if (Reply(msg_buf, pid) != 0){
+				printf("error shutdown\n");
+			}
+		}
+		if (msg_buf->type == SYMLINK) {
+			struct link_msg* link_buf = (void*)msg_buf;
+			msg_buf->data0 = symlink_yfs(pid, link_buf->ptr, link_buf->ptr2);
+			if (Reply(msg_buf, pid) != 0){
+				printf("error shutdown\n");
+			}
+		}
+		if (msg_buf->type == READLINK) {
+			struct link_msg* link_buf = (void*)msg_buf;
+			msg_buf->data0 = readlink_yfs(pid, link_buf->ptr, link_buf->ptr2, link_buf->data0);
 			if (Reply(msg_buf, pid) != 0){
 				printf("error shutdown\n");
 			}
