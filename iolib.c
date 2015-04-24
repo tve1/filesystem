@@ -343,3 +343,19 @@ int Link(char* oldname, char* newname) {
 	return link_msg.data0;
 
 }
+int Unlink(char* pathname) {
+	init();
+	if (is_relative(pathname) == 1){
+		pathname = add_cur_dir_to(pathname);
+	}
+
+	struct my_msg unlink_msg;
+	unlink_msg.type = UNLINK;
+	unlink_msg.ptr = pathname;
+	if (Send(&unlink_msg, -FILE_SERVER) != 0) {
+		printf("Error unlink\n");
+		return ERROR;
+	}
+	return unlink_msg.data0;
+
+}

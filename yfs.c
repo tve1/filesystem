@@ -377,7 +377,6 @@ int create_file(int srcpid, void* client_buf) {
 
 	char* filepath = malloc(MAXPATHNAMELEN);
 	
-	printf(" ---------%d %p %p %d\n", srcpid, filepath, client_buf, MAXPATHNAMELEN);
 	
 	int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
 	
@@ -385,7 +384,7 @@ int create_file(int srcpid, void* client_buf) {
 		printf("Error copying data\n");
 		return ERROR;
 	}
-	printf("filepath %s\n", filepath);
+
 	struct decorated_inode* dir_inode = get_directory_inode(get_pathname(filepath));
 	if (dir_inode == NULL) {
 		return ERROR;
@@ -400,8 +399,7 @@ int create_file(int srcpid, void* client_buf) {
 	add_dir_entry(dir_inode, new_file);
 	return new_file->inum;
 }
-
-struct decorated_inode* get_file_inode(struct decorated_inode* dir_inode, char* filename) {
+void remove_dir_entry(struct decorated_inode* dir_inode, char* filename) {
 	int i;
 	printf("looking for %s in dir %d\n", filename, dir_inode->inum);
 
@@ -420,14 +418,44 @@ struct decorated_inode* get_file_inode(struct decorated_inode* dir_inode, char* 
 
 					int k;
 					for (k = 0; k < DIRNAMELEN; k++) {
-						printf("%c to %c\n", cur_dir->name[k], filename[k]);
+						if (cur_dir->name[k] != filename[k]) {
+							is_valid = 0;
+						}
+					}
+					if (is_valid) {
+						cur_dir->inum = 0;
+						WriteSector(dir_inode->inode->direct[i], block_data);
+						return cur_dir;	
+					}				
+				}
+			}
+		}
+	}
+}
+
+struct decorated_inode* get_file_inode(struct decorated_inode* dir_inode, char* filename) {
+	int i;
+
+	void* block_data = malloc(BLOCKSIZE);
+	memset(block_data, 0, BLOCKSIZE);
+	for (i = 0; i < NUM_DIRECT; i++) {
+		if (dir_inode->inode->direct[i] != 0) {
+			ReadSector(dir_inode->inode->direct[i], block_data);
+			
+			int j;
+			for (j = 0; j < BLOCKSIZE / sizeof(struct dir_entry); j++) {
+				struct dir_entry* cur_dir = (struct dir_entry*)(block_data + sizeof(struct dir_entry) * j);
+				if (cur_dir->inum != 0) {
+					int is_valid = 1;
+
+					int k;
+					for (k = 0; k < DIRNAMELEN; k++) {
 						if (cur_dir->name[k] != filename[k]) {
 							is_valid = 0;
 						}
 					}
 					if (is_valid) {
 						struct decorated_inode *file_node = get_inode(cur_dir->inum);
-						printf("Returning file node %d\n", file_node->inum);
 						return file_node;	
 					}				
 				}
@@ -766,6 +794,11 @@ int link_yfs(int srcpid, void* client_buf_old, void* client_buf_new) {
 	}
 
 	struct decorated_inode* old_file = get_file_inode(get_directory_inode(get_pathname(filepath_old)), get_filename(filepath_old));
+	if (old_file->inode->type == INODE_DIRECTORY) {
+		printf("Error: Cannot link to directory\n");
+		return ERROR;
+	}	
+
 	struct decorated_inode* new_dir_inode = get_directory_inode(get_pathname(filepath_new));
 
 	if (old_file == NULL) {
@@ -784,6 +817,45 @@ int link_yfs(int srcpid, void* client_buf_old, void* client_buf_new) {
 	return 0;
 }
 
+int unlink_yfs(int srcpid, void* client_buf) {
+	char* filepath = malloc(MAXPATHNAMELEN);
+	
+	int result = CopyFrom(srcpid, filepath, client_buf, MAXPATHNAMELEN);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+
+	struct decorated_inode* file_to_unlink = get_file_inode(get_directory_inode(get_pathname(filepath)), get_filename(filepath));
+	if (file_to_unlink->inode->type == INODE_DIRECTORY) {
+		printf("Error: Cannot unlink directory\n");
+		return ERROR;
+	}	
+	
+	file_to_unlink->inode->nlink--;
+
+	remove_dir_entry(get_directory_inode(get_pathname(filepath)), get_filename(filepath));
+	if (file_to_unlink->inode->nlink == 0) {
+		file_to_unlink->inode->type = INODE_FREE;
+
+		int i;
+		for (i=0; i < NUM_DIRECT; i++) {
+			if (file_to_unlink->inode->direct[i] != 0) {
+				void* block_data = malloc(BLOCKSIZE);
+				memset(block_data, 0, BLOCKSIZE);				
+				WriteSector(file_to_unlink->inode->direct[i], block_data);
+				struct free_data_block* new_blk = malloc(sizeof(struct free_data_block));
+				new_blk->next = free_data_block_list;
+				new_blk->block_num = file_to_unlink->inode->direct[i];
+				free_data_block_list = new_blk;
+			}
+		}
+	}
+
+	return 0;
+
+}
 void shutdown() {
 	printf("Shutting down\n");
 	sync_all();
@@ -945,6 +1017,12 @@ int main(int argc, char* argv[]) {
 		if (msg_buf->type == LINK) {
 			struct link_msg* link_buf = (struct link_buf*) msg_buf;
 			msg_buf->data0 = link_yfs(pid, link_buf->ptr, link_buf->ptr2);
+			if (Reply(msg_buf, pid) != 0){
+				printf("error shutdown\n");
+			}
+		}
+		if (msg_buf->type == UNLINK) {
+			msg_buf->data0 = unlink_yfs(pid, msg_buf->ptr);
 			if (Reply(msg_buf, pid) != 0){
 				printf("error shutdown\n");
 			}
