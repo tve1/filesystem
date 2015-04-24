@@ -746,6 +746,44 @@ int sync_all() {
 	return 0;
 }
 
+int link_yfs(int srcpid, void* client_buf_old, void* client_buf_new) {
+	char* filepath_old = malloc(MAXPATHNAMELEN);
+	
+	int result = CopyFrom(srcpid, filepath_old, client_buf_old, MAXPATHNAMELEN);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+
+	char* filepath_new = malloc(MAXPATHNAMELEN);
+	
+	result = CopyFrom(srcpid, filepath_new, client_buf_new, MAXPATHNAMELEN);
+	
+	if (result != 0) {
+		printf("Error copying data\n");
+		return ERROR;
+	}
+
+	struct decorated_inode* old_file = get_file_inode(get_directory_inode(get_pathname(filepath_old)), get_filename(filepath_old));
+	struct decorated_inode* new_dir_inode = get_directory_inode(get_pathname(filepath_new));
+
+	if (old_file == NULL) {
+		printf("Old file does not exist\n");
+		return ERROR;
+	}
+
+	struct dir_entry* new_link = malloc(sizeof(struct dir_entry));
+
+	new_link->inum = old_file->inum;
+	memcpy(new_link->name, get_filename(filepath_new), DIRNAMELEN);
+	old_file->inode->nlink++;
+
+	add_dir_entry(new_dir_inode, new_link);
+
+	return 0;
+}
+
 void shutdown() {
 	printf("Shutting down\n");
 	sync_all();
@@ -900,6 +938,13 @@ int main(int argc, char* argv[]) {
 		}
 		if (msg_buf->type == SHUTDOWN) {
 			shutdown();
+			if (Reply(msg_buf, pid) != 0){
+				printf("error shutdown\n");
+			}
+		}
+		if (msg_buf->type == LINK) {
+			struct link_msg* link_buf = (struct link_buf*) msg_buf;
+			msg_buf->data0 = link_yfs(pid, link_buf->ptr, link_buf->ptr2);
 			if (Reply(msg_buf, pid) != 0){
 				printf("error shutdown\n");
 			}

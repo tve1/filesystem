@@ -20,7 +20,7 @@ main()
 {
 	int fd;
 	char* result = malloc(16);
-	printf("Sample 1 -- creating file \n");
+	printf("Sample 1 -- creating file\n");
 	// printf("making dir newdir\n");
 	// fd = MkDir("/hello");
 	// fd = ChDir("///./neabcdefghijklmnopqt");
@@ -39,13 +39,14 @@ main()
 	
 	// // printf("result %d\n", fd);
 	
-	// fd = Create("/c.txt");
-	// Write(fd, "aaa\0", 4);
-	// Close(fd);
+	fd = Create("/c.txt");
+	Write(fd, "abc\0", 4);
+	Close(fd);
 
 	// Sync();
 
-	fd = Open("/c.txt");
+	Link("c.txt", "b.txt");
+	fd = Open("b.txt");
 	Read(fd, result, 3);
 	Close(fd);
 	printf("Result is %s\n", result);

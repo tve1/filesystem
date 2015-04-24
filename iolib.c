@@ -321,3 +321,25 @@ int Shutdown() {
 	return 0;
 
 }
+
+int Link(char* oldname, char* newname) {
+	init();
+	printf("size %d %d\n", sizeof(struct my_msg), sizeof(struct link_msg));
+	if (is_relative(oldname) == 1){
+		oldname = add_cur_dir_to(oldname);
+	}
+	if (is_relative(newname) == 1){
+		newname = add_cur_dir_to(newname);
+	}
+
+	struct link_msg link_msg;
+	link_msg.type = LINK;
+	link_msg.ptr = oldname;
+	link_msg.ptr2 = newname;
+	if (Send(&link_msg, -FILE_SERVER) != 0) {
+		printf("Error link\n");
+		return ERROR;
+	}
+	return link_msg.data0;
+
+}
