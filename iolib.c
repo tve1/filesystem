@@ -309,3 +309,15 @@ int Sync() {
 	return sync_msg.data0;
 
 }
+
+int Shutdown() {
+	init();
+	struct my_msg sd_msg;
+	sd_msg.type = SHUTDOWN;
+	if (Send(&sd_msg, -FILE_SERVER) != 0) {
+		printf("Error shutdown\n");
+		return ERROR;
+	}
+	return 0;
+
+}

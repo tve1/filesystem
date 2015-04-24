@@ -8,6 +8,7 @@
 #define RMDIR 7
 #define STAT 8	
 #define SYNC 9	
+#define SHUTDOWN 10
 #define DATA2LENGTH 16
 struct my_msg {
 	short type;

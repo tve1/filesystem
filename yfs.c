@@ -746,6 +746,12 @@ int sync_all() {
 	return 0;
 }
 
+void shutdown() {
+	printf("Shutting down\n");
+	sync_all();
+	Exit(0);
+}
+
 int main(int argc, char* argv[]) {
 	msg_buf = malloc(sizeof(struct my_msg));
 	struct fs_header* header = malloc(SECTORSIZE);
@@ -816,6 +822,7 @@ int main(int argc, char* argv[]) {
 		
 		if (pid == ERROR) {
 			printf("Error receiving\n");
+			shutdown();
 			break;
 		}
 		printf("Received message %d\n", msg_buf->type);
@@ -889,6 +896,12 @@ int main(int argc, char* argv[]) {
 			msg_buf->data0 = sync_all();
 			if (Reply(msg_buf, pid) != 0){
 				printf("error removing directory\n");
+			}
+		}
+		if (msg_buf->type == SHUTDOWN) {
+			shutdown();
+			if (Reply(msg_buf, pid) != 0){
+				printf("error shutdown\n");
 			}
 		}
 	}
